@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2>WebSocket Test</h2>
+<div id="log"></div>
+
+<script>
+const log = (text) => {
+    document.getElementById("log").innerHTML += "<p>" + text + "</p>";
+};
+
+// 👉 генерируем случайный user ID
+const userId = "user" + Math.floor(Math.random() * 1000);
+const targetId = prompt("Кому отправлять? (например user123)");
+
+log("I am: " + userId);
+log("Send to: " + targetId);
+
+const ws = new WebSocket("ws://localhost:8080/ws");
+
+ws.onopen = () => {
+    log("Connected");
+
+    ws.send(JSON.stringify({
+        type: "register",
+        from: userId,
+        pubKey: "test_key"
+    }));
+
+    setTimeout(() => {
+        ws.send(JSON.stringify({
+            type: "message",
+            from: userId,
+            to: targetId,
+            data: "Hello from " + userId
+        }));
+    }, 1000);
+};
+
+ws.onmessage = (msg) => {
+    log("Received: " + msg.data);
+};
+
+ws.onclose = () => {
+    log("Disconnected");
+};
+</script>
+
+</body>
+</html>
