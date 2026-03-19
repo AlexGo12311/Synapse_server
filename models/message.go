@@ -4,6 +4,8 @@ type Message struct {
 	Type   string `json:"type"`
 	From   string `json:"from"`
 	To     string `json:"to"`
-	Data   string `json:"data"`
-	PubKey string `json:"pubKey"`
+	Data   []byte `json:"data"`
+	Key    []byte `json:"key"`
+	Iv     []byte `json:"iv"`
+	PubKey []byte `json:"pubKey"`
 }

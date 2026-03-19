@@ -2,49 +2,172 @@
 <html>
 <body>
 
-<h2>WebSocket Test</h2>
+<h2>🔐 Secure Chat Test</h2>
+
+<p>Your ID: <b id="myId"></b></p>
+<input id="targetInput" placeholder="Enter target user ID"/>
+<button onclick="connect()">Connect</button>
+
 <div id="log"></div>
 
 <script>
+let userId = "user" + Math.floor(Math.random() * 1000);
+document.getElementById("myId").innerText = userId;
+
+let targetId = null;
+let ws;
+
+let rsaKeys;
+let publicKeyExported;
+const publicKeys = {};
+const sentPubKeys = {};
+const sentMessages = {};
+
 const log = (text) => {
     document.getElementById("log").innerHTML += "<p>" + text + "</p>";
 };
 
-// 👉 генерируем случайный user ID
-const userId = "user" + Math.floor(Math.random() * 1000);
-const targetId = prompt("Кому отправлять? (например user123)");
+// ===== BASE64 =====
+function arrayBufferToBase64(buffer) {
+    return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+}
+function base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+}
 
-log("I am: " + userId);
-log("Send to: " + targetId);
+// ===== RSA =====
+async function generateRSA() {
+    rsaKeys = await crypto.subtle.generateKey(
+        { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1,0,1]), hash: "SHA-256" },
+        true,
+        ["encrypt","decrypt"]
+    );
+    publicKeyExported = await crypto.subtle.exportKey("spki", rsaKeys.publicKey);
+}
+async function importPublicKey(base64Key) {
+    const keyData = base64ToArrayBuffer(base64Key);
+    return await crypto.subtle.importKey(
+        "spki",
+        keyData,
+        { name: "RSA-OAEP", hash: "SHA-256" },
+        true,
+        ["encrypt"]
+    );
+}
 
-const ws = new WebSocket("ws://localhost:8080/ws");
+// ===== AES =====
+async function generateAES() {
+    return await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt","decrypt"]);
+}
+async function encryptAES(message, key) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(message);
+    const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+    return { cipher, iv };
+}
+async function decryptAES(cipher, iv, key) {
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
+    return new TextDecoder().decode(decrypted);
+}
 
-ws.onopen = () => {
-    log("Connected");
+// ===== RSA + AES =====
+async function encryptRSA(aesKey, publicKey) {
+    const raw = await crypto.subtle.exportKey("raw", aesKey);
+    return await crypto.subtle.encrypt({ name: "RSA-OAEP" }, publicKey, raw);
+}
+async function decryptRSA(encryptedKey) {
+    const decrypted = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, rsaKeys.privateKey, encryptedKey);
+    return await crypto.subtle.importKey("raw", decrypted, { name: "AES-GCM" }, true, ["decrypt"]);
+}
+
+// ===== CONNECT =====
+async function connect() {
+    targetId = document.getElementById("targetInput").value.trim();
+    if (!targetId) { alert("Enter target user ID!"); return; }
+
+    ws = new WebSocket("ws://localhost:8080/ws");
+
+    ws.onopen = async () => {
+        log("Connected");
+
+        await generateRSA();
+        const pubKeyBase64 = arrayBufferToBase64(publicKeyExported);
+
+        // register
+        ws.send(JSON.stringify({ type: "register", from: userId, pubKey: pubKeyBase64 }));
+
+        // send pubkey to target only once
+        if (!sentPubKeys[targetId]) {
+            sentPubKeys[targetId] = true;
+            ws.send(JSON.stringify({ type: "pubkey", from: userId, to: targetId, pubKey: pubKeyBase64 }));
+        }
+
+        log("🔑 Sent initial pubkey to " + targetId);
+    };
+
+    ws.onmessage = async (msg) => {
+        let data;
+        try { data = JSON.parse(msg.data); } 
+        catch { log("❌ JSON error"); return; }
+
+        log("📩 " + data.type + " from " + data.from);
+
+        // ===== PUBKEY =====
+        if (data.type === "pubkey") {
+            try {
+                publicKeys[data.from] = await importPublicKey(data.pubKey);
+                log("✅ Got key from " + data.from);
+            } catch (e) { log("❌ Key import error"); console.error(e); return; }
+
+            if (!sentPubKeys[data.from]) {
+                sentPubKeys[data.from] = true;
+                ws.send(JSON.stringify({ type: "pubkey", from: userId, to: data.from, pubKey: arrayBufferToBase64(publicKeyExported) }));
+            }
+
+            if (!sentMessages[data.from] && publicKeys[data.from]) {
+                sentMessages[data.from] = true;
+                sendMessage("Hello from " + userId, data.from);
+            }
+        }
+
+        // ===== MESSAGE =====
+        if (data.type === "message") {
+            try {
+                const encryptedKey = base64ToArrayBuffer(data.key);
+                const cipher = base64ToArrayBuffer(data.data);
+                const iv = base64ToArrayBuffer(data.iv);
+
+                const aesKey = await decryptRSA(encryptedKey);
+                const text = await decryptAES(cipher, iv, aesKey);
+                log("🔓 " + data.from + ": " + text);
+            } catch (e) { log("❌ Decrypt error"); console.error(e); }
+        }
+    };
+}
+
+// ===== SEND =====
+async function sendMessage(text, receiverId) {
+    const receiverKey = publicKeys[receiverId];
+    if (!receiverKey) { log("No key yet for " + receiverId + ", message not sent"); return; }
+
+    const aesKey = await generateAES();
+    const encrypted = await encryptAES(text, aesKey);
+    const encryptedKey = await encryptRSA(aesKey, receiverKey);
 
     ws.send(JSON.stringify({
-        type: "register",
+        type: "message",
         from: userId,
-        pubKey: "test_key"
+        to: receiverId,
+        data: arrayBufferToBase64(encrypted.cipher),
+        iv: arrayBufferToBase64(encrypted.iv),
+        key: arrayBufferToBase64(encryptedKey)
     }));
 
-    setTimeout(() => {
-        ws.send(JSON.stringify({
-            type: "message",
-            from: userId,
-            to: targetId,
-            data: "Hello from " + userId
-        }));
-    }, 1000);
-};
-
-ws.onmessage = (msg) => {
-    log("Received: " + msg.data);
-};
-
-ws.onclose = () => {
-    log("Disconnected");
-};
+    log("🔐 Sent to " + receiverId);
+}
 </script>
 
 </body>
