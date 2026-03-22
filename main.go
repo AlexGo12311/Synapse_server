@@ -8,6 +8,8 @@ import (
 )
 
 func main() {
+	http.HandleFunc("/register", handlers.Register)
+	http.HandleFunc("/login", handlers.Login)
 	http.HandleFunc("/ws", handlers.HandleConnections)
 
 	log.Println("Server running on :8080")
