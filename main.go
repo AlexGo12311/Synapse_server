@@ -7,11 +7,28 @@ import (
 	"Synapse_server/handlers"
 )
 
+// CORS middleware
+func enableCORS(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+
+		if r.Method == "OPTIONS" {
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
 func main() {
-	http.HandleFunc("/register", handlers.Register)
-	http.HandleFunc("/login", handlers.Login)
-	http.HandleFunc("/ws", handlers.HandleConnections)
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/register", handlers.Register)
+	mux.HandleFunc("/login", handlers.Login)
+	mux.HandleFunc("/ws", handlers.HandleConnections)
 
 	log.Println("Server running on :8080")
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8080", enableCORS(mux))
 }

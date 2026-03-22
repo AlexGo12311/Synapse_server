@@ -4,17 +4,24 @@
 
 <h2>🔐 Secure Chat Test</h2>
 
-<p>Your ID: <b id="myId"></b></p>
+<!-- LOGIN -->
+<h3>Login</h3>
+<input id="username" placeholder="username">
+<input id="password" placeholder="password" type="password">
+<button onclick="login()">Login</button>
+
+<p>Your ID: <b id="myId">not logged in</b></p>
+
+<hr>
+
+<!-- CHAT -->
 <input id="targetInput" placeholder="Enter target user ID"/>
 <button onclick="connect()">Connect</button>
 
 <div id="log"></div>
 
 <script>
-let userId = "user" + Math.floor(Math.random() * 1000);
-document.getElementById("myId").innerText = userId;
-
-let targetId = null;
+let userId = null;
 let ws;
 
 let rsaKeys;
@@ -26,6 +33,29 @@ const sentMessages = {};
 const log = (text) => {
     document.getElementById("log").innerHTML += "<p>" + text + "</p>";
 };
+
+// ===== LOGIN =====
+async function login() {
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    const res = await fetch("http://localhost:8080/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username, password})
+    });
+
+    if (!res.ok) {
+        alert("Login failed");
+        return;
+    }
+
+    const data = await res.json();
+    userId = data.id;
+
+    document.getElementById("myId").innerText = userId;
+    log("✅ Logged in as " + username);
+}
 
 // ===== BASE64 =====
 function arrayBufferToBase64(buffer) {
@@ -85,10 +115,18 @@ async function decryptRSA(encryptedKey) {
 
 // ===== CONNECT =====
 async function connect() {
-    targetId = document.getElementById("targetInput").value.trim();
-    if (!targetId) { alert("Enter target user ID!"); return; }
+    if (!userId) {
+        alert("Login first!");
+        return;
+    }
 
-    ws = new WebSocket("ws://localhost:8080/ws");
+    const targetId = document.getElementById("targetInput").value.trim();
+    if (!targetId) {
+        alert("Enter target user ID!");
+        return;
+    }
+
+    ws = new WebSocket("ws://localhost:8080/ws?userId=" + userId);
 
     ws.onopen = async () => {
         log("Connected");
@@ -96,13 +134,14 @@ async function connect() {
         await generateRSA();
         const pubKeyBase64 = arrayBufferToBase64(publicKeyExported);
 
-        // register
-        ws.send(JSON.stringify({ type: "register", from: userId, pubKey: pubKeyBase64 }));
-
-        // send pubkey to target only once
         if (!sentPubKeys[targetId]) {
             sentPubKeys[targetId] = true;
-            ws.send(JSON.stringify({ type: "pubkey", from: userId, to: targetId, pubKey: pubKeyBase64 }));
+            ws.send(JSON.stringify({
+                type: "pubkey",
+                from: userId,
+                to: targetId,
+                pubKey: pubKeyBase64
+            }));
         }
 
         log("🔑 Sent initial pubkey to " + targetId);
@@ -110,40 +149,43 @@ async function connect() {
 
     ws.onmessage = async (msg) => {
         let data;
-        try { data = JSON.parse(msg.data); } 
+        try { data = JSON.parse(msg.data); }
         catch { log("❌ JSON error"); return; }
 
         log("📩 " + data.type + " from " + data.from);
 
-        // ===== PUBKEY =====
         if (data.type === "pubkey") {
-            try {
-                publicKeys[data.from] = await importPublicKey(data.pubKey);
-                log("✅ Got key from " + data.from);
-            } catch (e) { log("❌ Key import error"); console.error(e); return; }
+            publicKeys[data.from] = await importPublicKey(data.pubKey);
+            log("✅ Got key from " + data.from);
 
             if (!sentPubKeys[data.from]) {
                 sentPubKeys[data.from] = true;
-                ws.send(JSON.stringify({ type: "pubkey", from: userId, to: data.from, pubKey: arrayBufferToBase64(publicKeyExported) }));
+                ws.send(JSON.stringify({
+                    type: "pubkey",
+                    from: userId,
+                    to: data.from,
+                    pubKey: arrayBufferToBase64(publicKeyExported)
+                }));
             }
 
-            if (!sentMessages[data.from] && publicKeys[data.from]) {
+            if (!sentMessages[data.from]) {
                 sentMessages[data.from] = true;
                 sendMessage("Hello from " + userId, data.from);
             }
         }
 
-        // ===== MESSAGE =====
         if (data.type === "message") {
             try {
-                const encryptedKey = base64ToArrayBuffer(data.key);
-                const cipher = base64ToArrayBuffer(data.data);
-                const iv = base64ToArrayBuffer(data.iv);
-
-                const aesKey = await decryptRSA(encryptedKey);
-                const text = await decryptAES(cipher, iv, aesKey);
+                const aesKey = await decryptRSA(base64ToArrayBuffer(data.key));
+                const text = await decryptAES(
+                    base64ToArrayBuffer(data.data),
+                    base64ToArrayBuffer(data.iv),
+                    aesKey
+                );
                 log("🔓 " + data.from + ": " + text);
-            } catch (e) { log("❌ Decrypt error"); console.error(e); }
+            } catch {
+                log("❌ Decrypt error");
+            }
         }
     };
 }
@@ -151,7 +193,7 @@ async function connect() {
 // ===== SEND =====
 async function sendMessage(text, receiverId) {
     const receiverKey = publicKeys[receiverId];
-    if (!receiverKey) { log("No key yet for " + receiverId + ", message not sent"); return; }
+    if (!receiverKey) return;
 
     const aesKey = await generateAES();
     const encrypted = await encryptAES(text, aesKey);
@@ -159,7 +201,6 @@ async function sendMessage(text, receiverId) {
 
     ws.send(JSON.stringify({
         type: "message",
-        from: userId,
         to: receiverId,
         data: arrayBufferToBase64(encrypted.cipher),
         iv: arrayBufferToBase64(encrypted.iv),
