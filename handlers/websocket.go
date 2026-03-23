@@ -13,7 +13,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// очередь для оффлайн пользователей
+// оффлайн сообщения
 var Pending = make(map[string][]models.Message)
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +24,6 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
-	// берем userId из URL
 	userID := r.URL.Query().Get("userId")
 	if userID == "" {
 		log.Println("No userId provided")
@@ -36,12 +35,14 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		Conn: ws,
 	}
 
-	// сохраняем клиента
-	storage.Mutex.Lock()
+	// ===== CONNECT =====
+	storage.ClientsMutex.Lock()
 	storage.Clients[client.ID] = &client
+	storage.ClientsMutex.Unlock()
+
 	log.Println("User connected:", client.ID)
 
-	// отправляем все отложенные сообщения
+	// отправляем оффлайн сообщения
 	if msgs, ok := Pending[client.ID]; ok {
 		for _, m := range msgs {
 			log.Println("Delivering pending", m.Type, "from", m.From, "to", client.ID)
@@ -49,38 +50,87 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 		delete(Pending, client.ID)
 	}
-	storage.Mutex.Unlock()
 
-	// ===== ЧТЕНИЕ СООБЩЕНИЙ =====
+	// ===== READ LOOP =====
 	for {
 		var msg models.Message
+
 		err := ws.ReadJSON(&msg)
 		if err != nil {
 			log.Println("Read error:", err)
 			break
 		}
 
-		// подменяем From реальным userID
 		msg.From = client.ID
 
-		storage.Mutex.Lock()
+		switch msg.Type {
 
-		receiver, ok := storage.Clients[msg.To]
-		if ok {
-			log.Println("Forwarding", msg.Type, "from", msg.From, "to", msg.To)
-			receiver.Conn.WriteJSON(msg)
-		} else {
-			log.Println("User not connected yet, storing", msg.Type, "for", msg.To)
-			Pending[msg.To] = append(Pending[msg.To], msg)
+		// =========================
+		// СОХРАНИТЬ PUBKEY
+		// =========================
+		case "set_pubkey":
+			storage.UsersMutex.Lock()
+
+			user, ok := storage.UsersByID[msg.From]
+			if ok {
+				user.PubKey = msg.PubKey
+				log.Println("Saved pubkey for", msg.From)
+			} else {
+				log.Println("User not found:", msg.From)
+			}
+
+			storage.UsersMutex.Unlock()
+
+		// =========================
+		// ПОЛУЧИТЬ PUBKEY
+		// =========================
+		case "get_pubkey":
+			storage.UsersMutex.Lock()
+
+			user, ok := storage.UsersByID[msg.To]
+
+			if ok && user.PubKey != "" {
+				log.Println("Sending pubkey of", msg.To, "to", msg.From)
+
+				ws.WriteJSON(models.Message{
+					Type:   "pubkey",
+					From:   msg.To,
+					To:     msg.From,
+					PubKey: user.PubKey,
+				})
+			} else {
+				log.Println("No pubkey found for", msg.To)
+			}
+
+			storage.UsersMutex.Unlock()
+
+		// =========================
+		// СООБЩЕНИЕ
+		// =========================
+		case "message":
+			storage.ClientsMutex.Lock()
+
+			receiver, ok := storage.Clients[msg.To]
+
+			if ok {
+				log.Println("Forwarding message from", msg.From, "to", msg.To)
+				receiver.Conn.WriteJSON(msg)
+			} else {
+				log.Println("User offline, storing message for", msg.To)
+				Pending[msg.To] = append(Pending[msg.To], msg)
+			}
+
+			storage.ClientsMutex.Unlock()
+
+		default:
+			log.Println("Unknown message type:", msg.Type)
 		}
-
-		storage.Mutex.Unlock()
 	}
 
 	// ===== DISCONNECT =====
-	storage.Mutex.Lock()
+	storage.ClientsMutex.Lock()
 	delete(storage.Clients, client.ID)
-	storage.Mutex.Unlock()
+	storage.ClientsMutex.Unlock()
 
 	log.Println("User disconnected:", client.ID)
 }

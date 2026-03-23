@@ -15,42 +15,54 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
-		http.Error(w, "Invalid data", http.StatusBadRequest)
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
 	storage.UsersMutex.Lock()
 	defer storage.UsersMutex.Unlock()
 
-	if _, exists := storage.Users[user.Username]; exists {
-		http.Error(w, "User already exists", http.StatusBadRequest)
+	// проверка: существует ли username
+	if _, exists := storage.UsersByUsername[user.Username]; exists {
+		http.Error(w, "User already exists", http.StatusConflict)
 		return
 	}
 
+	// генерируем ID
 	user.ID = uuid.New().String()
-	storage.Users[user.Username] = user
 
+	// сохраняем в ОБЕ карты
+	storage.UsersByID[user.ID] = &user
+	storage.UsersByUsername[user.Username] = &user
+
+	// ответ
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }
 
 // ===== LOGIN =====
 func Login(w http.ResponseWriter, r *http.Request) {
-	var req models.User
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "Invalid data", http.StatusBadRequest)
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
 	storage.UsersMutex.Lock()
-	defer storage.UsersMutex.Unlock()
+	user, ok := storage.UsersByUsername[req.Username]
+	storage.UsersMutex.Unlock()
 
-	user, exists := storage.Users[req.Username]
-	if !exists || user.Password != req.Password {
+	if !ok || user.Password != req.Password {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
+	// возвращаем пользователя (с ID)
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }

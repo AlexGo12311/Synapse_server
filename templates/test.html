@@ -27,9 +27,9 @@ let ws;
 let rsaKeys;
 let publicKeyExported;
 const publicKeys = {};
-const sentPubKeys = {};
 const sentMessages = {};
 
+// ===== UI =====
 const log = (text) => {
     document.getElementById("log").innerHTML += "<p>" + text + "</p>";
 };
@@ -51,9 +51,11 @@ async function login() {
     }
 
     const data = await res.json();
-    userId = data.id;
+    console.log("LOGIN RESPONSE:", data);
 
+    userId = data.id;
     document.getElementById("myId").innerText = userId;
+
     log("✅ Logged in as " + username);
 }
 
@@ -71,12 +73,19 @@ function base64ToArrayBuffer(base64) {
 // ===== RSA =====
 async function generateRSA() {
     rsaKeys = await crypto.subtle.generateKey(
-        { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1,0,1]), hash: "SHA-256" },
+        {
+            name: "RSA-OAEP",
+            modulusLength: 2048,
+            publicExponent: new Uint8Array([1,0,1]),
+            hash: "SHA-256"
+        },
         true,
         ["encrypt","decrypt"]
     );
+
     publicKeyExported = await crypto.subtle.exportKey("spki", rsaKeys.publicKey);
 }
+
 async function importPublicKey(base64Key) {
     const keyData = base64ToArrayBuffer(base64Key);
     return await crypto.subtle.importKey(
@@ -90,27 +99,60 @@ async function importPublicKey(base64Key) {
 
 // ===== AES =====
 async function generateAES() {
-    return await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt","decrypt"]);
+    return await crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt","decrypt"]
+    );
 }
+
 async function encryptAES(message, key) {
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encoded = new TextEncoder().encode(message);
-    const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+
+    const cipher = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        encoded
+    );
+
     return { cipher, iv };
 }
+
 async function decryptAES(cipher, iv, key) {
-    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
+    const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        cipher
+    );
+
     return new TextDecoder().decode(decrypted);
 }
 
 // ===== RSA + AES =====
 async function encryptRSA(aesKey, publicKey) {
     const raw = await crypto.subtle.exportKey("raw", aesKey);
-    return await crypto.subtle.encrypt({ name: "RSA-OAEP" }, publicKey, raw);
+    return await crypto.subtle.encrypt(
+        { name: "RSA-OAEP" },
+        publicKey,
+        raw
+    );
 }
+
 async function decryptRSA(encryptedKey) {
-    const decrypted = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, rsaKeys.privateKey, encryptedKey);
-    return await crypto.subtle.importKey("raw", decrypted, { name: "AES-GCM" }, true, ["decrypt"]);
+    const decrypted = await crypto.subtle.decrypt(
+        { name: "RSA-OAEP" },
+        rsaKeys.privateKey,
+        encryptedKey
+    );
+
+    return await crypto.subtle.importKey(
+        "raw",
+        decrypted,
+        { name: "AES-GCM" },
+        true,
+        ["decrypt"]
+    );
 }
 
 // ===== CONNECT =====
@@ -134,39 +176,41 @@ async function connect() {
         await generateRSA();
         const pubKeyBase64 = arrayBufferToBase64(publicKeyExported);
 
-        if (!sentPubKeys[targetId]) {
-            sentPubKeys[targetId] = true;
-            ws.send(JSON.stringify({
-                type: "pubkey",
-                from: userId,
-                to: targetId,
-                pubKey: pubKeyBase64
-            }));
-        }
+        // 🔑 1. отправляем свой ключ серверу
+        ws.send(JSON.stringify({
+            type: "set_pubkey",
+            from: userId,
+            pubKey: pubKeyBase64
+        }));
 
-        log("🔑 Sent initial pubkey to " + targetId);
+        log("🔑 PubKey saved on server");
+
+        // 📥 2. запрашиваем ключ собеседника
+        ws.send(JSON.stringify({
+            type: "get_pubkey",
+            from: userId,
+            to: targetId
+        }));
+
+        log("📡 Requested pubkey of " + targetId);
     };
 
     ws.onmessage = async (msg) => {
         let data;
-        try { data = JSON.parse(msg.data); }
-        catch { log("❌ JSON error"); return; }
+
+        try {
+            data = JSON.parse(msg.data);
+        } catch {
+            log("❌ JSON error");
+            return;
+        }
 
         log("📩 " + data.type + " from " + data.from);
 
+        // ===== ПОЛУЧИЛИ PUBKEY =====
         if (data.type === "pubkey") {
             publicKeys[data.from] = await importPublicKey(data.pubKey);
             log("✅ Got key from " + data.from);
-
-            if (!sentPubKeys[data.from]) {
-                sentPubKeys[data.from] = true;
-                ws.send(JSON.stringify({
-                    type: "pubkey",
-                    from: userId,
-                    to: data.from,
-                    pubKey: arrayBufferToBase64(publicKeyExported)
-                }));
-            }
 
             if (!sentMessages[data.from]) {
                 sentMessages[data.from] = true;
@@ -174,14 +218,17 @@ async function connect() {
             }
         }
 
+        // ===== ПОЛУЧИЛИ MESSAGE =====
         if (data.type === "message") {
             try {
                 const aesKey = await decryptRSA(base64ToArrayBuffer(data.key));
+
                 const text = await decryptAES(
                     base64ToArrayBuffer(data.data),
                     base64ToArrayBuffer(data.iv),
                     aesKey
                 );
+
                 log("🔓 " + data.from + ": " + text);
             } catch {
                 log("❌ Decrypt error");
@@ -193,7 +240,10 @@ async function connect() {
 // ===== SEND =====
 async function sendMessage(text, receiverId) {
     const receiverKey = publicKeys[receiverId];
-    if (!receiverKey) return;
+    if (!receiverKey) {
+        log("❌ No public key for " + receiverId);
+        return;
+    }
 
     const aesKey = await generateAES();
     const encrypted = await encryptAES(text, aesKey);
