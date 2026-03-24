@@ -5,6 +5,7 @@ import (
 	"Synapse_server/storage"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/websocket"
 )
@@ -41,6 +42,18 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	storage.ClientsMutex.Unlock()
 
 	log.Println("User connected:", client.ID)
+	// отправляем историю чатов
+	storage.MessagesMutex.Lock()
+
+	for chatID, msgs := range storage.Messages {
+		if strings.Contains(chatID, client.ID) {
+			for _, m := range msgs {
+				ws.WriteJSON(m)
+			}
+		}
+	}
+
+	storage.MessagesMutex.Unlock()
 
 	// отправляем оффлайн сообщения
 	if msgs, ok := Pending[client.ID]; ok {
@@ -107,7 +120,17 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		// =========================
 		// СООБЩЕНИЕ
 		// =========================
+
 		case "message":
+
+			// 🔐 сохраняем историю
+			chatID := storage.GetChatID(msg.From, msg.To)
+
+			storage.MessagesMutex.Lock()
+			storage.Messages[chatID] = append(storage.Messages[chatID], msg)
+			storage.MessagesMutex.Unlock()
+
+			// 🚀 отправка
 			storage.ClientsMutex.Lock()
 
 			receiver, ok := storage.Clients[msg.To]

@@ -14,9 +14,15 @@
 
 <hr>
 
-<!-- CHAT -->
+<!-- CONNECT -->
 <input id="targetInput" placeholder="Enter target user ID"/>
 <button onclick="connect()">Connect</button>
+
+<hr>
+
+<!-- CHAT -->
+<input id="messageInput" placeholder="Enter message"/>
+<button onclick="handleSend()">Send</button>
 
 <div id="log"></div>
 
@@ -26,8 +32,9 @@ let ws;
 
 let rsaKeys;
 let publicKeyExported;
+
 const publicKeys = {};
-const sentMessages = {};
+const pendingMessages = {};
 
 // ===== UI =====
 const log = (text) => {
@@ -51,7 +58,6 @@ async function login() {
     }
 
     const data = await res.json();
-    console.log("LOGIN RESPONSE:", data);
 
     userId = data.id;
     document.getElementById("myId").innerText = userId;
@@ -66,7 +72,9 @@ function arrayBufferToBase64(buffer) {
 function base64ToArrayBuffer(base64) {
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
     return bytes;
 }
 
@@ -132,6 +140,7 @@ async function decryptAES(cipher, iv, key) {
 // ===== RSA + AES =====
 async function encryptRSA(aesKey, publicKey) {
     const raw = await crypto.subtle.exportKey("raw", aesKey);
+
     return await crypto.subtle.encrypt(
         { name: "RSA-OAEP" },
         publicKey,
@@ -171,12 +180,13 @@ async function connect() {
     ws = new WebSocket("ws://localhost:8080/ws?userId=" + userId);
 
     ws.onopen = async () => {
-        log("Connected");
+        log("🟢 Connected");
 
         await generateRSA();
+
         const pubKeyBase64 = arrayBufferToBase64(publicKeyExported);
 
-        // 🔑 1. отправляем свой ключ серверу
+        // отправляем свой ключ
         ws.send(JSON.stringify({
             type: "set_pubkey",
             from: userId,
@@ -185,10 +195,9 @@ async function connect() {
 
         log("🔑 PubKey saved on server");
 
-        // 📥 2. запрашиваем ключ собеседника
+        // запрашиваем ключ собеседника
         ws.send(JSON.stringify({
             type: "get_pubkey",
-            from: userId,
             to: targetId
         }));
 
@@ -205,16 +214,17 @@ async function connect() {
             return;
         }
 
-        log("📩 " + data.type + " from " + data.from);
-
         // ===== ПОЛУЧИЛИ PUBKEY =====
         if (data.type === "pubkey") {
             publicKeys[data.from] = await importPublicKey(data.pubKey);
-            log("✅ Got key from " + data.from);
+            log("🔑 Key received from " + data.from);
 
-            if (!sentMessages[data.from]) {
-                sentMessages[data.from] = true;
-                sendMessage("Hello from " + userId, data.from);
+            // отправляем отложенные сообщения
+            if (pendingMessages[data.from]) {
+                for (let m of pendingMessages[data.from]) {
+                    sendMessage(m, data.from);
+                }
+                delete pendingMessages[data.from];
             }
         }
 
@@ -229,7 +239,7 @@ async function connect() {
                     aesKey
                 );
 
-                log("🔓 " + data.from + ": " + text);
+                log("💬 " + data.from + ": " + text);
             } catch {
                 log("❌ Decrypt error");
             }
@@ -237,13 +247,39 @@ async function connect() {
     };
 }
 
-// ===== SEND =====
-async function sendMessage(text, receiverId) {
-    const receiverKey = publicKeys[receiverId];
-    if (!receiverKey) {
-        log("❌ No public key for " + receiverId);
+// ===== SEND BUTTON =====
+function handleSend() {
+    const text = document.getElementById("messageInput").value;
+    const targetId = document.getElementById("targetInput").value;
+
+    if (!text || !targetId) {
+        log("❌ no key or empty msg");
         return;
     }
+
+    sendMessage(text, targetId);
+}
+
+// ===== SEND LOGIC =====
+async function sendMessage(text, receiverId) {
+    if (!publicKeys[receiverId]) {
+        log("⏳ Key not ready, saving message...");
+
+        if (!pendingMessages[receiverId]) {
+            pendingMessages[receiverId] = [];
+        }
+
+        pendingMessages[receiverId].push(text);
+
+        ws.send(JSON.stringify({
+            type: "get_pubkey",
+            to: receiverId
+        }));
+
+        return;
+    }
+
+    const receiverKey = publicKeys[receiverId];
 
     const aesKey = await generateAES();
     const encrypted = await encryptAES(text, aesKey);
@@ -257,7 +293,7 @@ async function sendMessage(text, receiverId) {
         key: arrayBufferToBase64(encryptedKey)
     }));
 
-    log("🔐 Sent to " + receiverId);
+    log("📤 Me: " + text);
 }
 </script>
 
