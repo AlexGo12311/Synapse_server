@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"Synapse_server/database"
 	"Synapse_server/handlers"
 )
 
@@ -23,6 +24,10 @@ func enableCORS(h http.Handler) http.Handler {
 }
 
 func main() {
+
+	// ИНИЦИАЛИЗАЦИЯ БД
+	database.Init()
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/register", handlers.Register)
