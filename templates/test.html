@@ -30,8 +30,8 @@
 let userId = null;
 let ws;
 
-let rsaKeys;
-let publicKeyExported;
+let rsaKeys = null;
+let publicKeyBase64 = null;
 
 const publicKeys = {};
 const pendingMessages = {};
@@ -40,6 +40,67 @@ const pendingMessages = {};
 const log = (text) => {
     document.getElementById("log").innerHTML += "<p>" + text + "</p>";
 };
+
+// ===== BASE64 =====
+function ab2b64(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function b642ab(b64) {
+    const bin = atob(b64);
+    return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+
+// ===== RSA =====
+async function loadOrGenerateRSA() {
+    const saved = localStorage.getItem("rsaKeys");
+
+    if (saved) {
+        log("🔑 Loading keys from localStorage");
+
+        const parsed = JSON.parse(saved);
+
+        rsaKeys = {
+            privateKey: await crypto.subtle.importKey(
+                "jwk",
+                parsed.privateKey,
+                { name: "RSA-OAEP", hash: "SHA-256" },
+                true,
+                ["decrypt"]
+            ),
+            publicKey: await crypto.subtle.importKey(
+                "spki",
+                b642ab(parsed.publicKey),
+                { name: "RSA-OAEP", hash: "SHA-256" },
+                true,
+                ["encrypt"]
+            )
+        };
+
+        publicKeyBase64 = parsed.publicKey;
+        return;
+    }
+
+    log("🔑 Generating new RSA");
+
+    rsaKeys = await crypto.subtle.generateKey({
+        name: "RSA-OAEP",
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1,0,1]),
+        hash: "SHA-256"
+    }, true, ["encrypt", "decrypt"]);
+
+    const pub = await crypto.subtle.exportKey("spki", rsaKeys.publicKey);
+    const priv = await crypto.subtle.exportKey("jwk", rsaKeys.privateKey);
+
+    publicKeyBase64 = ab2b64(pub);
+
+    localStorage.setItem("rsaKeys", JSON.stringify({
+        publicKey: publicKeyBase64,
+        privateKey: priv
+    }));
+
+    log("🔑 Keys saved");
+}
 
 // ===== LOGIN =====
 async function login() {
@@ -58,114 +119,17 @@ async function login() {
     }
 
     const data = await res.json();
-
     userId = data.id;
+
     document.getElementById("myId").innerText = userId;
-
     log("✅ Logged in as " + username);
-}
 
-// ===== BASE64 =====
-function arrayBufferToBase64(buffer) {
-    return btoa(String.fromCharCode(...new Uint8Array(buffer)));
-}
-function base64ToArrayBuffer(base64) {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-}
-
-// ===== RSA =====
-async function generateRSA() {
-    rsaKeys = await crypto.subtle.generateKey(
-        {
-            name: "RSA-OAEP",
-            modulusLength: 2048,
-            publicExponent: new Uint8Array([1,0,1]),
-            hash: "SHA-256"
-        },
-        true,
-        ["encrypt","decrypt"]
-    );
-
-    publicKeyExported = await crypto.subtle.exportKey("spki", rsaKeys.publicKey);
-}
-
-async function importPublicKey(base64Key) {
-    const keyData = base64ToArrayBuffer(base64Key);
-    return await crypto.subtle.importKey(
-        "spki",
-        keyData,
-        { name: "RSA-OAEP", hash: "SHA-256" },
-        true,
-        ["encrypt"]
-    );
-}
-
-// ===== AES =====
-async function generateAES() {
-    return await crypto.subtle.generateKey(
-        { name: "AES-GCM", length: 256 },
-        true,
-        ["encrypt","decrypt"]
-    );
-}
-
-async function encryptAES(message, key) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encoded = new TextEncoder().encode(message);
-
-    const cipher = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv },
-        key,
-        encoded
-    );
-
-    return { cipher, iv };
-}
-
-async function decryptAES(cipher, iv, key) {
-    const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv },
-        key,
-        cipher
-    );
-
-    return new TextDecoder().decode(decrypted);
-}
-
-// ===== RSA + AES =====
-async function encryptRSA(aesKey, publicKey) {
-    const raw = await crypto.subtle.exportKey("raw", aesKey);
-
-    return await crypto.subtle.encrypt(
-        { name: "RSA-OAEP" },
-        publicKey,
-        raw
-    );
-}
-
-async function decryptRSA(encryptedKey) {
-    const decrypted = await crypto.subtle.decrypt(
-        { name: "RSA-OAEP" },
-        rsaKeys.privateKey,
-        encryptedKey
-    );
-
-    return await crypto.subtle.importKey(
-        "raw",
-        decrypted,
-        { name: "AES-GCM" },
-        true,
-        ["decrypt"]
-    );
+    // 🔥 Ключ грузим сразу после логина
+    await loadOrGenerateRSA();
 }
 
 // ===== CONNECT =====
-async function connect() {
+function connect() {
     if (!userId) {
         alert("Login first!");
         return;
@@ -177,31 +141,25 @@ async function connect() {
         return;
     }
 
-    ws = new WebSocket("ws://localhost:8080/ws?userId=" + userId);
+    ws = new WebSocket(`ws://localhost:8080/ws?userId=${userId}`);
 
-    ws.onopen = async () => {
+    ws.onopen = () => {
         log("🟢 Connected");
 
-        await generateRSA();
-
-        const pubKeyBase64 = arrayBufferToBase64(publicKeyExported);
-
-        // отправляем свой ключ
+        // отправляем свой pubkey
         ws.send(JSON.stringify({
             type: "set_pubkey",
             from: userId,
-            pubKey: pubKeyBase64
+            pubKey: publicKeyBase64
         }));
 
-        log("🔑 PubKey saved on server");
+        log("🔑 PubKey sent");
 
         // запрашиваем ключ собеседника
         ws.send(JSON.stringify({
             type: "get_pubkey",
             to: targetId
         }));
-
-        log("📡 Requested pubkey of " + targetId);
     };
 
     ws.onmessage = async (msg) => {
@@ -214,28 +172,29 @@ async function connect() {
             return;
         }
 
-        // ===== ПОЛУЧИЛИ PUBKEY =====
+        // ===== PUBKEY =====
         if (data.type === "pubkey") {
-            publicKeys[data.from] = await importPublicKey(data.pubKey);
+            publicKeys[data.from] = await crypto.subtle.importKey(
+                "spki",
+                b642ab(data.pubKey),
+                { name: "RSA-OAEP", hash: "SHA-256" },
+                true,
+                ["encrypt"]
+            );
+
             log("🔑 Key received from " + data.from);
 
-            // отправляем отложенные сообщения
-            if (pendingMessages[data.from]) {
-                for (let m of pendingMessages[data.from]) {
-                    sendMessage(m, data.from);
-                }
-                delete pendingMessages[data.from];
-            }
+            flushPending(data.from);
         }
 
-        // ===== ПОЛУЧИЛИ MESSAGE =====
+        // ===== MESSAGE =====
         if (data.type === "message") {
             try {
-                const aesKey = await decryptRSA(base64ToArrayBuffer(data.key));
+                const aesKey = await decryptRSA(b642ab(data.key));
 
                 const text = await decryptAES(
-                    base64ToArrayBuffer(data.data),
-                    base64ToArrayBuffer(data.iv),
+                    b642ab(data.data),
+                    b642ab(data.iv),
                     aesKey
                 );
 
@@ -247,23 +206,80 @@ async function connect() {
     };
 }
 
-// ===== SEND BUTTON =====
+// ===== AES =====
+async function generateAES() {
+    return await crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt","decrypt"]
+    );
+}
+
+async function encryptAES(text, key) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    const cipher = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        new TextEncoder().encode(text)
+    );
+
+    return { cipher, iv };
+}
+
+async function decryptAES(cipher, iv, key) {
+    const dec = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        cipher
+    );
+
+    return new TextDecoder().decode(dec);
+}
+
+// ===== RSA =====
+async function encryptRSA(aesKey, publicKey) {
+    const raw = await crypto.subtle.exportKey("raw", aesKey);
+
+    return await crypto.subtle.encrypt(
+        { name: "RSA-OAEP" },
+        publicKey,
+        raw
+    );
+}
+
+async function decryptRSA(encrypted) {
+    const raw = await crypto.subtle.decrypt(
+        { name: "RSA-OAEP" },
+        rsaKeys.privateKey,
+        encrypted
+    );
+
+    return await crypto.subtle.importKey(
+        "raw",
+        raw,
+        { name: "AES-GCM" },
+        true,
+        ["decrypt"]
+    );
+}
+
+// ===== SEND =====
 function handleSend() {
     const text = document.getElementById("messageInput").value;
     const targetId = document.getElementById("targetInput").value;
 
     if (!text || !targetId) {
-        log("❌ no key or empty msg");
+        log("❌ empty msg");
         return;
     }
 
     sendMessage(text, targetId);
 }
 
-// ===== SEND LOGIC =====
 async function sendMessage(text, receiverId) {
     if (!publicKeys[receiverId]) {
-        log("⏳ Key not ready, saving message...");
+        log("⏳ Key not ready, saving...");
 
         if (!pendingMessages[receiverId]) {
             pendingMessages[receiverId] = [];
@@ -279,21 +295,32 @@ async function sendMessage(text, receiverId) {
         return;
     }
 
-    const receiverKey = publicKeys[receiverId];
-
     const aesKey = await generateAES();
     const encrypted = await encryptAES(text, aesKey);
-    const encryptedKey = await encryptRSA(aesKey, receiverKey);
+    const encryptedKey = await encryptRSA(aesKey, publicKeys[receiverId]);
 
     ws.send(JSON.stringify({
         type: "message",
         to: receiverId,
-        data: arrayBufferToBase64(encrypted.cipher),
-        iv: arrayBufferToBase64(encrypted.iv),
-        key: arrayBufferToBase64(encryptedKey)
+        data: ab2b64(encrypted.cipher),
+        iv: ab2b64(encrypted.iv),
+        key: ab2b64(encryptedKey)
     }));
 
     log("📤 Me: " + text);
+}
+
+// ===== QUEUE =====
+async function flushPending(user) {
+    if (!pendingMessages[user]) return;
+
+    const msgs = pendingMessages[user];
+
+    for (let m of msgs) {
+        await sendMessage(m, user);
+    }
+
+    delete pendingMessages[user];
 }
 </script>
 
