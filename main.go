@@ -33,6 +33,7 @@ func main() {
 	mux.HandleFunc("/register", handlers.Register)
 	mux.HandleFunc("/login", handlers.Login)
 	mux.HandleFunc("/ws", handlers.HandleConnections)
+	mux.HandleFunc("/history", handlers.GetHistory)
 
 	log.Println("Server running on :8080")
 	http.ListenAndServe(":8080", enableCORS(mux))

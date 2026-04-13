@@ -1,328 +1,218 @@
 <!DOCTYPE html>
 <html>
+<head>
+    <meta charset="UTF-8">
+    <title>🔐 Secure Chat with History</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; line-height: 1.6; }
+        #log { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; background: #f9f9f9; border-radius: 5px; }
+        .msg-history { color: #777; font-style: italic; }
+        .msg-error { color: red; }
+        hr { margin: 20px 0; }
+        input { padding: 8px; margin: 5px 0; width: 200px; }
+        button { padding: 8px 15px; cursor: pointer; }
+    </style>
+</head>
 <body>
 
-<h2>🔐 Secure Chat Test</h2>
+<h2>🔐 Secure Chat (E2EE + DB History)</h2>
 
-<!-- LOGIN -->
-<h3>Login</h3>
-<input id="username" placeholder="username">
-<input id="password" placeholder="password" type="password">
-<button onclick="login()">Login</button>
-
-<p>Your ID: <b id="myId">not logged in</b></p>
-
-<hr>
-
-<!-- CONNECT -->
-<input id="targetInput" placeholder="Enter target user ID"/>
-<button onclick="connect()">Connect</button>
+<div>
+    <h3>1. Login</h3>
+    <input id="username" placeholder="Username">
+    <input id="password" placeholder="Password" type="password">
+    <button onclick="login()">Login</button>
+    <p>Your ID: <b id="myId">not logged in</b></p>
+</div>
 
 <hr>
 
-<!-- CHAT -->
-<input id="messageInput" placeholder="Enter message"/>
-<button onclick="handleSend()">Send</button>
+<div>
+    <h3>2. Connect to Chat</h3>
+    <input id="targetInput" placeholder="Enter target user ID"/>
+    <button onclick="connect()">Connect & Load History</button>
+</div>
+
+<hr>
 
 <div id="log"></div>
+<input id="messageInput" placeholder="Type message..." style="width: 80%"/>
+<button onclick="handleSend()">Send</button>
 
 <script>
 let userId = null;
 let ws;
-
 let rsaKeys = null;
 let publicKeyBase64 = null;
-
 const publicKeys = {};
 const pendingMessages = {};
 
-// ===== UI =====
-const log = (text) => {
-    document.getElementById("log").innerHTML += "<p>" + text + "</p>";
+const logDiv = document.getElementById("log");
+const addLog = (text, className = "") => {
+    const p = document.createElement("p");
+    if (className) p.className = className;
+    p.innerHTML = text;
+    logDiv.appendChild(p);
+    logDiv.scrollTop = logDiv.scrollHeight;
 };
 
-// ===== BASE64 =====
-function ab2b64(buf) {
-    return btoa(String.fromCharCode(...new Uint8Array(buf)));
-}
-function b642ab(b64) {
-    const bin = atob(b64);
-    return Uint8Array.from(bin, c => c.charCodeAt(0));
-}
+// ===== BASE64 HELPERS =====
+function ab2b64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function b642ab(b64) { return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
 
-// ===== RSA =====
+// ===== RSA KEYS =====
 async function loadOrGenerateRSA() {
     const saved = localStorage.getItem("rsaKeys");
-
     if (saved) {
-        log("🔑 Loading keys from localStorage");
-
+        addLog("🔑 Loading keys from storage...");
         const parsed = JSON.parse(saved);
-
         rsaKeys = {
-            privateKey: await crypto.subtle.importKey(
-                "jwk",
-                parsed.privateKey,
-                { name: "RSA-OAEP", hash: "SHA-256" },
-                true,
-                ["decrypt"]
-            ),
-            publicKey: await crypto.subtle.importKey(
-                "spki",
-                b642ab(parsed.publicKey),
-                { name: "RSA-OAEP", hash: "SHA-256" },
-                true,
-                ["encrypt"]
-            )
+            privateKey: await crypto.subtle.importKey("jwk", parsed.privateKey, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]),
+            publicKey: await crypto.subtle.importKey("spki", b642ab(parsed.publicKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"])
         };
-
         publicKeyBase64 = parsed.publicKey;
         return;
     }
-
-    log("🔑 Generating new RSA");
-
+    addLog("🔑 Generating new RSA keys...");
     rsaKeys = await crypto.subtle.generateKey({
-        name: "RSA-OAEP",
-        modulusLength: 2048,
-        publicExponent: new Uint8Array([1,0,1]),
-        hash: "SHA-256"
+        name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1,0,1]), hash: "SHA-256"
     }, true, ["encrypt", "decrypt"]);
-
     const pub = await crypto.subtle.exportKey("spki", rsaKeys.publicKey);
     const priv = await crypto.subtle.exportKey("jwk", rsaKeys.privateKey);
-
     publicKeyBase64 = ab2b64(pub);
-
-    localStorage.setItem("rsaKeys", JSON.stringify({
-        publicKey: publicKeyBase64,
-        privateKey: priv
-    }));
-
-    log("🔑 Keys saved");
+    localStorage.setItem("rsaKeys", JSON.stringify({ publicKey: publicKeyBase64, privateKey: priv }));
 }
 
-// ===== LOGIN =====
+// ===== CRYPTO AES =====
+async function generateAES() { return await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt","decrypt"]); }
+async function encryptAES(text, key) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(text));
+    return { cipher, iv };
+}
+async function decryptAES(cipher, iv, key) {
+    const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
+    return new TextDecoder().decode(dec);
+}
+
+// ===== CRYPTO RSA WRAPPING =====
+async function encryptRSA(aesKey, publicKey) {
+    const raw = await crypto.subtle.exportKey("raw", aesKey);
+    return await crypto.subtle.encrypt({ name: "RSA-OAEP" }, publicKey, raw);
+}
+async function decryptRSA(encrypted) {
+    const raw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, rsaKeys.privateKey, encrypted);
+    return await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, true, ["decrypt"]);
+}
+
+// ===== HISTORY =====
+async function loadHistory(targetId) {
+    addLog("⏳ Loading chat history...", "msg-history");
+    try {
+        const res = await fetch(`http://localhost:8080/history?from=${userId}&to=${targetId}`);
+        const messages = await res.json();
+        if (!messages) return;
+
+        for (let msg of messages) {
+            // Мы можем расшифровать историю только если сообщение было отправлено НАМ
+            if (msg.to === userId) {
+                try {
+                    const aesKey = await decryptRSA(b642ab(msg.key));
+                    const text = await decryptAES(b642ab(msg.data), b642ab(msg.iv), aesKey);
+                    addLog(`<b>${msg.from}:</b> ${text} <small>(history)</small>`, "msg-history");
+                } catch (e) {
+                    addLog("❌ History decrypt error", "msg-error");
+                }
+            } else {
+                addLog(`<b>Me:</b> [Sent encrypted message]`, "msg-history");
+            }
+        }
+    } catch (err) {
+        addLog("❌ Failed to load history", "msg-error");
+    }
+}
+
+// ===== API CALLS =====
 async function login() {
     const username = document.getElementById("username").value;
     const password = document.getElementById("password").value;
-
     const res = await fetch("http://localhost:8080/login", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
+        method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({username, password})
     });
-
-    if (!res.ok) {
-        alert("Login failed");
-        return;
-    }
-
+    if (!res.ok) { alert("Login failed"); return; }
     const data = await res.json();
     userId = data.id;
-
     document.getElementById("myId").innerText = userId;
-    log("✅ Logged in as " + username);
-
-    // 🔥 Ключ грузим сразу после логина
+    addLog("✅ Logged in as " + username);
     await loadOrGenerateRSA();
 }
 
-// ===== CONNECT =====
 function connect() {
-    if (!userId) {
-        alert("Login first!");
-        return;
-    }
-
     const targetId = document.getElementById("targetInput").value.trim();
-    if (!targetId) {
-        alert("Enter target user ID!");
-        return;
-    }
+    if (!userId || !targetId) { alert("Login and target ID required"); return; }
 
     ws = new WebSocket(`ws://localhost:8080/ws?userId=${userId}`);
 
     ws.onopen = () => {
-        log("🟢 Connected");
-
-        // отправляем свой pubkey
-        ws.send(JSON.stringify({
-            type: "set_pubkey",
-            from: userId,
-            pubKey: publicKeyBase64
-        }));
-
-        log("🔑 PubKey sent");
-
-        // запрашиваем ключ собеседника
-        ws.send(JSON.stringify({
-            type: "get_pubkey",
-            to: targetId
-        }));
+        addLog("🟢 WebSocket Connected");
+        ws.send(JSON.stringify({ type: "set_pubkey", from: userId, pubKey: publicKeyBase64 }));
+        ws.send(JSON.stringify({ type: "get_pubkey", to: targetId }));
+        
+        // Загружаем историю сразу после открытия сокета
+        loadHistory(targetId);
     };
 
     ws.onmessage = async (msg) => {
-        let data;
-
-        try {
-            data = JSON.parse(msg.data);
-        } catch {
-            log("❌ JSON error");
-            return;
-        }
-
-        // ===== PUBKEY =====
+        const data = JSON.parse(msg.data);
         if (data.type === "pubkey") {
-            publicKeys[data.from] = await crypto.subtle.importKey(
-                "spki",
-                b642ab(data.pubKey),
-                { name: "RSA-OAEP", hash: "SHA-256" },
-                true,
-                ["encrypt"]
-            );
-
-            log("🔑 Key received from " + data.from);
-
+            publicKeys[data.from] = await crypto.subtle.importKey("spki", b642ab(data.pubKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+            addLog("🔑 Key received from " + data.from);
             flushPending(data.from);
         }
-
-        // ===== MESSAGE =====
         if (data.type === "message") {
             try {
                 const aesKey = await decryptRSA(b642ab(data.key));
-
-                const text = await decryptAES(
-                    b642ab(data.data),
-                    b642ab(data.iv),
-                    aesKey
-                );
-
-                log("💬 " + data.from + ": " + text);
-            } catch {
-                log("❌ Decrypt error");
-            }
+                const text = await decryptAES(b642ab(data.data), b642ab(data.iv), aesKey);
+                addLog(`<b>${data.from}:</b> ${text}`);
+            } catch (e) { addLog("❌ Decrypt error", "msg-error"); }
         }
     };
-}
-
-// ===== AES =====
-async function generateAES() {
-    return await crypto.subtle.generateKey(
-        { name: "AES-GCM", length: 256 },
-        true,
-        ["encrypt","decrypt"]
-    );
-}
-
-async function encryptAES(text, key) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-
-    const cipher = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv },
-        key,
-        new TextEncoder().encode(text)
-    );
-
-    return { cipher, iv };
-}
-
-async function decryptAES(cipher, iv, key) {
-    const dec = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv },
-        key,
-        cipher
-    );
-
-    return new TextDecoder().decode(dec);
-}
-
-// ===== RSA =====
-async function encryptRSA(aesKey, publicKey) {
-    const raw = await crypto.subtle.exportKey("raw", aesKey);
-
-    return await crypto.subtle.encrypt(
-        { name: "RSA-OAEP" },
-        publicKey,
-        raw
-    );
-}
-
-async function decryptRSA(encrypted) {
-    const raw = await crypto.subtle.decrypt(
-        { name: "RSA-OAEP" },
-        rsaKeys.privateKey,
-        encrypted
-    );
-
-    return await crypto.subtle.importKey(
-        "raw",
-        raw,
-        { name: "AES-GCM" },
-        true,
-        ["decrypt"]
-    );
-}
-
-// ===== SEND =====
-function handleSend() {
-    const text = document.getElementById("messageInput").value;
-    const targetId = document.getElementById("targetInput").value;
-
-    if (!text || !targetId) {
-        log("❌ empty msg");
-        return;
-    }
-
-    sendMessage(text, targetId);
 }
 
 async function sendMessage(text, receiverId) {
     if (!publicKeys[receiverId]) {
-        log("⏳ Key not ready, saving...");
-
-        if (!pendingMessages[receiverId]) {
-            pendingMessages[receiverId] = [];
-        }
-
+        addLog("⏳ Waiting for public key...");
+        if (!pendingMessages[receiverId]) pendingMessages[receiverId] = [];
         pendingMessages[receiverId].push(text);
-
-        ws.send(JSON.stringify({
-            type: "get_pubkey",
-            to: receiverId
-        }));
-
+        ws.send(JSON.stringify({ type: "get_pubkey", to: receiverId }));
         return;
     }
-
     const aesKey = await generateAES();
     const encrypted = await encryptAES(text, aesKey);
     const encryptedKey = await encryptRSA(aesKey, publicKeys[receiverId]);
 
     ws.send(JSON.stringify({
-        type: "message",
-        to: receiverId,
-        data: ab2b64(encrypted.cipher),
-        iv: ab2b64(encrypted.iv),
-        key: ab2b64(encryptedKey)
+        type: "message", to: receiverId,
+        data: ab2b64(encrypted.cipher), iv: ab2b64(encrypted.iv), key: ab2b64(encryptedKey)
     }));
-
-    log("📤 Me: " + text);
+    addLog(`<b>Me:</b> ${text}`);
 }
 
-// ===== QUEUE =====
+function handleSend() {
+    const input = document.getElementById("messageInput");
+    const targetId = document.getElementById("targetInput").value;
+    if (input.value && targetId) {
+        sendMessage(input.value, targetId);
+        input.value = "";
+    }
+}
+
 async function flushPending(user) {
     if (!pendingMessages[user]) return;
-
-    const msgs = pendingMessages[user];
-
-    for (let m of msgs) {
-        await sendMessage(m, user);
-    }
-
+    for (let m of pendingMessages[user]) { await sendMessage(m, user); }
     delete pendingMessages[user];
 }
 </script>
-
 </body>
 </html>

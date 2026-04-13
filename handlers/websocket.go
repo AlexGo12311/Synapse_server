@@ -5,7 +5,6 @@ import (
 	"Synapse_server/storage"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/gorilla/websocket"
 )
@@ -13,9 +12,6 @@ import (
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
-
-// оффлайн сообщения
-var Pending = make(map[string][]models.Message)
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
@@ -42,27 +38,6 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	storage.ClientsMutex.Unlock()
 
 	log.Println("User connected:", client.ID)
-	// отправляем историю чатов
-	storage.MessagesMutex.Lock()
-
-	for chatID, msgs := range storage.Messages {
-		if strings.Contains(chatID, client.ID) {
-			for _, m := range msgs {
-				ws.WriteJSON(m)
-			}
-		}
-	}
-
-	storage.MessagesMutex.Unlock()
-
-	// отправляем оффлайн сообщения
-	if msgs, ok := Pending[client.ID]; ok {
-		for _, m := range msgs {
-			log.Println("Delivering pending", m.Type, "from", m.From, "to", client.ID)
-			ws.WriteJSON(m)
-		}
-		delete(Pending, client.ID)
-	}
 
 	// ===== READ LOOP =====
 	for {
@@ -79,68 +54,53 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		switch msg.Type {
 
 		// =========================
-		// СОХРАНИТЬ PUBKEY
+		// СОХРАНИТЬ PUBKEY (в БД)
 		// =========================
 		case "set_pubkey":
-			storage.UsersMutex.Lock()
-
-			user, ok := storage.UsersByID[msg.From]
-			if ok {
-				user.PubKey = msg.PubKey
-				log.Println("Saved pubkey for", msg.From)
-			} else {
-				log.Println("User not found:", msg.From)
-			}
-
-			storage.UsersMutex.Unlock()
+			storage.SavePubKey(msg.From, msg.PubKey)
+			log.Println("Saved pubkey for", msg.From)
 
 		// =========================
-		// ПОЛУЧИТЬ PUBKEY
+		// ПОЛУЧИТЬ PUBKEY (из БД)
 		// =========================
 		case "get_pubkey":
-			storage.UsersMutex.Lock()
 
-			user, ok := storage.UsersByID[msg.To]
+			key, err := storage.GetPubKey(msg.To)
 
-			if ok && user.PubKey != "" {
+			if err == nil && key != "" {
 				log.Println("Sending pubkey of", msg.To, "to", msg.From)
 
 				ws.WriteJSON(models.Message{
 					Type:   "pubkey",
 					From:   msg.To,
 					To:     msg.From,
-					PubKey: user.PubKey,
+					PubKey: key,
 				})
 			} else {
 				log.Println("No pubkey found for", msg.To)
 			}
 
-			storage.UsersMutex.Unlock()
-
 		// =========================
 		// СООБЩЕНИЕ
 		// =========================
-
 		case "message":
 
-			// 🔐 сохраняем историю
-			chatID := storage.GetChatID(msg.From, msg.To)
+			// 💾 сохраняем в БД
+			storage.SaveMessage(msg)
 
-			storage.MessagesMutex.Lock()
-			storage.Messages[chatID] = append(storage.Messages[chatID], msg)
-			storage.MessagesMutex.Unlock()
-
-			// 🚀 отправка
+			// 🚀 отправляем если пользователь онлайн
 			storage.ClientsMutex.Lock()
 
 			receiver, ok := storage.Clients[msg.To]
 
 			if ok {
 				log.Println("Forwarding message from", msg.From, "to", msg.To)
-				receiver.Conn.WriteJSON(msg)
+				err := receiver.Conn.WriteJSON(msg)
+				if err != nil {
+					log.Println("Write error:", err)
+				}
 			} else {
-				log.Println("User offline, storing message for", msg.To)
-				Pending[msg.To] = append(Pending[msg.To], msg)
+				log.Println("User offline, message saved in DB")
 			}
 
 			storage.ClientsMutex.Unlock()

@@ -32,6 +32,13 @@ func createTables() {
 		enc_key TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS users (
+		id TEXT PRIMARY KEY,
+		username TEXT UNIQUE,
+		password TEXT,
+		pubkey TEXT
+	);
 	`
 
 	_, err := DB.Exec(query)
