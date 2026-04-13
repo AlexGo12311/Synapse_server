@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"Synapse_server/middlewares"
+	"Synapse_server/models"
 	"encoding/json"
 	"net/http"
 
@@ -8,23 +10,38 @@ import (
 )
 
 func GetHistory(w http.ResponseWriter, r *http.Request) {
-	from := r.URL.Query().Get("from")
-	to := r.URL.Query().Get("to")
-
-	if from == "" || to == "" {
-		http.Error(w, "Missing 'from' or 'to' parameters", http.StatusBadRequest)
-		return
-	}
-
-	// Сервер САМ правильно склеивает и сортирует ID
-	chatID := storage.GetChatID(from, to)
-
-	messages, err := storage.GetMessages(chatID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	w.Header().Set("Content-Type", "application/json")
+
+	// ===== user из middleware =====
+	userIDRaw := r.Context().Value(middlewares.UserContextKey)
+	userID, ok := userIDRaw.(string)
+
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// ===== target =====
+	target := r.URL.Query().Get("to")
+	if target == "" {
+		http.Error(w, "Missing target", http.StatusBadRequest)
+		return
+	}
+
+	// ===== chat =====
+	chatID := storage.GetChatID(userID, target)
+
+	// ===== messages =====
+	messages, err := storage.GetMessages(chatID)
+	if err != nil {
+		http.Error(w, "DB error", http.StatusInternalServerError)
+		return
+	}
+
+	if messages == nil {
+		messages = []models.Message{}
+	}
+
 	json.NewEncoder(w).Encode(messages)
 }

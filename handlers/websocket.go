@@ -1,10 +1,12 @@
 package handlers
 
 import (
-	"Synapse_server/models"
-	"Synapse_server/storage"
 	"log"
 	"net/http"
+
+	"Synapse_server/models"
+	"Synapse_server/storage"
+	"Synapse_server/utils"
 
 	"github.com/gorilla/websocket"
 )
@@ -14,18 +16,27 @@ var upgrader = websocket.Upgrader{
 }
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
+
+	// ===== JWT ИЗ HEADER =====
+	tokenString := r.URL.Query().Get("token")
+	if tokenString == "" {
+		http.Error(w, "Missing token", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := utils.ParseToken(tokenString)
+	if err != nil {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	// ===== UPGRADE =====
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
 		return
 	}
 	defer ws.Close()
-
-	userID := r.URL.Query().Get("userId")
-	if userID == "" {
-		log.Println("No userId provided")
-		return
-	}
 
 	client := models.Client{
 		ID:   userID,
@@ -34,10 +45,10 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 	// ===== CONNECT =====
 	storage.ClientsMutex.Lock()
-	storage.Clients[client.ID] = &client
+	storage.Clients[userID] = &client
 	storage.ClientsMutex.Unlock()
 
-	log.Println("User connected:", client.ID)
+	log.Println("User connected:", userID)
 
 	// ===== READ LOOP =====
 	for {
@@ -49,71 +60,48 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		msg.From = client.ID
+		msg.From = userID
 
 		switch msg.Type {
 
-		// =========================
-		// СОХРАНИТЬ PUBKEY (в БД)
-		// =========================
 		case "set_pubkey":
-			storage.SavePubKey(msg.From, msg.PubKey)
-			log.Println("Saved pubkey for", msg.From)
+			storage.SavePubKey(userID, msg.PubKey)
+			log.Println("Saved pubkey for", userID)
 
-		// =========================
-		// ПОЛУЧИТЬ PUBKEY (из БД)
-		// =========================
 		case "get_pubkey":
+			key, _ := storage.GetPubKey(msg.To)
 
-			key, err := storage.GetPubKey(msg.To)
-
-			if err == nil && key != "" {
-				log.Println("Sending pubkey of", msg.To, "to", msg.From)
-
+			if key != "" {
 				ws.WriteJSON(models.Message{
 					Type:   "pubkey",
 					From:   msg.To,
-					To:     msg.From,
+					To:     userID,
 					PubKey: key,
 				})
-			} else {
-				log.Println("No pubkey found for", msg.To)
 			}
 
-		// =========================
-		// СООБЩЕНИЕ
-		// =========================
 		case "message":
 
-			// 💾 сохраняем в БД
+			// сохранить в БД
 			storage.SaveMessage(msg)
 
-			// 🚀 отправляем если пользователь онлайн
+			// отправить если онлайн
 			storage.ClientsMutex.Lock()
-
 			receiver, ok := storage.Clients[msg.To]
 
 			if ok {
-				log.Println("Forwarding message from", msg.From, "to", msg.To)
-				err := receiver.Conn.WriteJSON(msg)
-				if err != nil {
-					log.Println("Write error:", err)
-				}
-			} else {
-				log.Println("User offline, message saved in DB")
+				log.Println("Forwarding message from", userID, "to", msg.To)
+				receiver.Conn.WriteJSON(msg)
 			}
 
 			storage.ClientsMutex.Unlock()
-
-		default:
-			log.Println("Unknown message type:", msg.Type)
 		}
 	}
 
 	// ===== DISCONNECT =====
 	storage.ClientsMutex.Lock()
-	delete(storage.Clients, client.ID)
+	delete(storage.Clients, userID)
 	storage.ClientsMutex.Unlock()
 
-	log.Println("User disconnected:", client.ID)
+	log.Println("User disconnected:", userID)
 }
