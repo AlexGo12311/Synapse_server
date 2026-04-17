@@ -2,22 +2,23 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Secure Chat Stable</title>
+<title>🔐 Secure Chat FINAL</title>
 
 <style>
 body { font-family: sans-serif; max-width: 700px; margin: 20px auto; }
-#log { height: 320px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; }
+#log { height: 320px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #fafafa;}
 input, button { padding: 8px; margin: 5px; }
 .msg-me { color: green; }
 .msg-other { color: blue; }
-.msg-history { color: gray; }
 .msg-error { color: red; }
+.msg-warn { color: orange; }
+.msg-history { color: gray; }
 </style>
 </head>
 
 <body>
 
-<h2>🔐 Secure Chat (Stable E2EE FIX)</h2>
+<h2>🔐 Secure Chat (FINAL)</h2>
 
 <input id="username" placeholder="username">
 <input id="password" type="password" placeholder="password">
@@ -46,12 +47,12 @@ let rsaKeys = null;
 let publicKeyBase64 = null;
 
 const publicKeys = {};
-const historyCache = [];
-const processed = new Set();
+const fingerprints = {};
+const pendingMessages = {};
 
 const logDiv = document.getElementById("log");
 
-function log(t,c=""){
+function log(t, c="") {
     const el = document.createElement("div");
     el.className = c;
     el.innerHTML = t;
@@ -59,20 +60,27 @@ function log(t,c=""){
     logDiv.scrollTop = logDiv.scrollHeight;
 }
 
-// ================= BASE64 SAFE =================
-function safeB64(str) {
-    try {
-        if (!str || typeof str !== "string") return null;
-        if (!/^[A-Za-z0-9+/=]+$/.test(str)) return null;
-        return Uint8Array.from(atob(str), c => c.charCodeAt(0));
-    } catch {
-        return null;
-    }
+// ===== BASE64 =====
+function toB64(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function fromB64(str) {
+    const bin = atob(str);
+    const arr = new Uint8Array(bin.length);
+    for (let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+    return arr;
 }
 
-// ================= RSA =================
+// ===== FINGERPRINT =====
+async function getFingerprint(keyBuffer) {
+    const hash = await crypto.subtle.digest("SHA-256", keyBuffer);
+    return toB64(hash);
+}
+
+// ===== RSA INIT =====
 async function initRSA() {
-    const saved = localStorage.getItem("rsaKeys");
+    const keyName = "rsaKeys_" + userId;
+    const saved = localStorage.getItem(keyName);
 
     if (saved) {
         const p = JSON.parse(saved);
@@ -84,7 +92,7 @@ async function initRSA() {
                 true, ["decrypt"]
             ),
             publicKey: await crypto.subtle.importKey(
-                "spki", safeB64(p.publicKey),
+                "spki", fromB64(p.publicKey),
                 { name:"RSA-OAEP", hash:"SHA-256" },
                 true, ["encrypt"]
             )
@@ -105,9 +113,9 @@ async function initRSA() {
     const pub = await crypto.subtle.exportKey("spki", rsaKeys.publicKey);
     const priv = await crypto.subtle.exportKey("jwk", rsaKeys.privateKey);
 
-    publicKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(pub)));
+    publicKeyBase64 = toB64(pub);
 
-    localStorage.setItem("rsaKeys", JSON.stringify({
+    localStorage.setItem(keyName, JSON.stringify({
         publicKey: publicKeyBase64,
         privateKey: priv
     }));
@@ -115,7 +123,87 @@ async function initRSA() {
     log("🔑 Keys generated");
 }
 
-// ================= LOGIN =================
+// ===== CRYPTO =====
+async function encryptMessage(text, pubKey) {
+    const aes = await crypto.subtle.generateKey(
+        { name:"AES-GCM", length:256 },
+        true,
+        ["encrypt"]
+    );
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    const cipher = await crypto.subtle.encrypt(
+        { name:"AES-GCM", iv },
+        aes,
+        new TextEncoder().encode(text)
+    );
+
+    const raw = await crypto.subtle.exportKey("raw", aes);
+
+    const encKey = await crypto.subtle.encrypt(
+        { name:"RSA-OAEP" },
+        pubKey,
+        raw
+    );
+
+    return {
+        data: toB64(cipher),
+        iv: toB64(iv),
+        key: toB64(encKey)
+    };
+}
+
+// ===== HISTORY =====
+async function loadHistory(target) {
+    log("⏳ Loading history...", "msg-history");
+
+    const res = await fetch(`http://localhost:8080/history?to=${target}`, {
+        headers: {
+            "Authorization": "Bearer " + token
+        }
+    });
+
+    if (!res.ok) {
+        log("❌ Failed to load history", "msg-error");
+        return;
+    }
+
+    const messages = await res.json();
+
+    for (let m of messages) {
+        try {
+            const aesRaw = await crypto.subtle.decrypt(
+                { name:"RSA-OAEP" },
+                rsaKeys.privateKey,
+                fromB64(m.key)
+            );
+
+            const aes = await crypto.subtle.importKey(
+                "raw",
+                aesRaw,
+                { name:"AES-GCM" },
+                true,
+                ["decrypt"]
+            );
+
+            const plain = await crypto.subtle.decrypt(
+                { name:"AES-GCM", iv: fromB64(m.iv) },
+                aes,
+                fromB64(m.data)
+            );
+
+            const text = new TextDecoder().decode(plain);
+
+            log(`<b>${m.from}:</b> ${text}`, "msg-history");
+
+        } catch {
+            log("⚠️ Cannot decrypt old message", "msg-warn");
+        }
+    }
+}
+
+// ===== LOGIN =====
 async function login() {
     const res = await fetch("http://localhost:8080/login", {
         method:"POST",
@@ -138,7 +226,7 @@ async function login() {
     log("✅ Logged in");
 }
 
-// ================= CONNECT =================
+// ===== CONNECT =====
 function connect() {
     const target = targetInput.value;
 
@@ -164,106 +252,102 @@ function connect() {
         const d = JSON.parse(e.data);
 
         if (d.type === "pubkey") {
-            const key = safeB64(d.pubKey);
-            if (!key) return;
+            const raw = fromB64(d.pubKey);
+            const fp = await getFingerprint(raw);
+
+            if (fingerprints[d.from] && fingerprints[d.from] !== fp) {
+                log("⚠️ Key changed!", "msg-warn");
+            }
+
+            fingerprints[d.from] = fp;
 
             publicKeys[d.from] = await crypto.subtle.importKey(
                 "spki",
-                key,
+                raw,
                 { name:"RSA-OAEP", hash:"SHA-256" },
                 true,
                 ["encrypt"]
             );
 
-            log("🔑 Key from " + d.from);
-            tryDecryptHistory();
+            log("🔑 Key ready: " + d.from);
+
+            if (pendingMessages[d.from]) {
+                for (let msg of pendingMessages[d.from]) {
+                    sendMessage(msg, d.from);
+                }
+                delete pendingMessages[d.from];
+            }
         }
 
         if (d.type === "message") {
-            log(`<b>${d.from}:</b> ${d.data}`, "msg-other");
+            try {
+                const aesRaw = await crypto.subtle.decrypt(
+                    { name:"RSA-OAEP" },
+                    rsaKeys.privateKey,
+                    fromB64(d.key)
+                );
+
+                const aes = await crypto.subtle.importKey(
+                    "raw",
+                    aesRaw,
+                    { name:"AES-GCM" },
+                    true,
+                    ["decrypt"]
+                );
+
+                const plain = await crypto.subtle.decrypt(
+                    { name:"AES-GCM", iv: fromB64(d.iv) },
+                    aes,
+                    fromB64(d.data)
+                );
+
+                const text = new TextDecoder().decode(plain);
+
+                log(`<b>${d.from}:</b> ${text}`, "msg-other");
+
+            } catch {
+                log("❌ Decrypt error", "msg-error");
+            }
         }
     };
 }
 
-// ================= HISTORY =================
-async function loadHistory(target) {
-
-    log("⏳ Loading history...", "msg-history");
-
-    const res = await fetch(`http://localhost:8080/history?to=${target}`, {
-        headers:{ "Authorization":"Bearer " + token }
-    });
-
-    const messages = await res.json();
-
-    for (let m of messages) {
-        historyCache.push(m);
-    }
-
-    tryDecryptHistory();
-}
-
-// ================= DECRYPT HISTORY =================
-async function tryDecryptHistory() {
-
-    for (let m of historyCache) {
-
-        const id = m.id || (m.from + m.data);
-
-        if (processed.has(id)) continue;
-
-        // ❗ plain text fallback
-        if (!m.key || !m.iv) {
-            log(`<b>${m.from}:</b> ${m.data}`, "msg-history");
-            processed.add(id);
-            continue;
-        }
-
-        // wait for key
-        if (!publicKeys[m.from]) continue;
-
-        try {
-            const aesRaw = await crypto.subtle.decrypt(
-                { name:"RSA-OAEP" },
-                rsaKeys.privateKey,
-                safeB64(m.key)
-            );
-
-            const aes = await crypto.subtle.importKey(
-                "raw",
-                aesRaw,
-                { name:"AES-GCM" },
-                true,
-                ["decrypt"]
-            );
-
-            const plain = await crypto.subtle.decrypt(
-                { name:"AES-GCM", iv: safeB64(m.iv) },
-                aes,
-                safeB64(m.data)
-            );
-
-            const text = new TextDecoder().decode(plain);
-
-            log(`<b>${m.from}:</b> ${text}`, "msg-history");
-
-            processed.add(id);
-
-        } catch (e) {
-            log(`${m.from}: decrypt failed`, "msg-error");
-        }
-    }
-}
-
-// ================= SEND =================
+// ===== SEND =====
 function send() {
     const text = messageInput.value;
     const target = targetInput.value;
 
+    if (!text || !target) return;
+
+    sendMessage(text, target);
+    messageInput.value = "";
+}
+
+async function sendMessage(text, target) {
+
+    if (!publicKeys[target]) {
+        log("⏳ Waiting for key...");
+
+        if (!pendingMessages[target]) {
+            pendingMessages[target] = [];
+        }
+
+        pendingMessages[target].push(text);
+
+        ws.send(JSON.stringify({
+            type:"get_pubkey",
+            to: target
+        }));
+
+        return;
+    }
+
+    const encrypted = await encryptMessage(text, publicKeys[target]);
+
     ws.send(JSON.stringify({
         type:"message",
-        to:target,
-        data:text
+        to: target,
+        ...encrypted
     }));
 
     log(`<b>Me:</b> ${text}`, "msg-me");

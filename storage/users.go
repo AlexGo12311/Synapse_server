@@ -67,12 +67,18 @@ func GetUserByUsername(username string) (*models.User, error) {
 
 // SavePubKey обновляет публичный ключ пользователя.
 func SavePubKey(userID, pubkey string) {
-	_, err := database.DB.Exec(`
-		UPDATE users SET pubkey = ? WHERE id = ?
-	`, pubkey, userID)
+	result, err := database.DB.Exec(`
+        UPDATE users SET pubkey = ? WHERE id = ?
+    `, pubkey, userID)
 
 	if err != nil {
 		log.Println("❌ PUBKEY SAVE ERROR:", err)
+		return
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		log.Printf("⚠️ ПРЕДУПРЕЖДЕНИЕ: Ключ не обновлен. Пользователь с ID %s не найден.", userID)
 	}
 }
 
