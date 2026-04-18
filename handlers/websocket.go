@@ -1,10 +1,13 @@
 package handlers
 
 import (
-	"Synapse_server/models"
-	"Synapse_server/storage"
+	"encoding/json"
 	"log"
 	"net/http"
+
+	"Synapse_server/models"
+	"Synapse_server/storage"
+	"Synapse_server/utils"
 
 	"github.com/gorilla/websocket"
 )
@@ -13,69 +16,113 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// очередь для оффлайн пользователей
-var Pending = make(map[string][]models.Message)
-
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
-	ws, _ := upgrader.Upgrade(w, r, nil)
+
+	tokenString := r.URL.Query().Get("token")
+	if tokenString == "" {
+		http.Error(w, "Missing token", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := utils.ParseToken(tokenString)
+	if err != nil {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("Upgrade error:", err)
+		return
+	}
 	defer ws.Close()
 
-	var client models.Client
-	client.Conn = ws
+	client := models.Client{
+		ID:   userID,
+		Conn: ws,
+	}
+
+	storage.ClientsMutex.Lock()
+	storage.Clients[userID] = &client
+	storage.ClientsMutex.Unlock()
+
+	log.Println("User connected:", userID)
 
 	for {
-		var msg models.Message
-		err := ws.ReadJSON(&msg)
-		if err != nil {
+		var raw map[string]interface{}
+
+		if err := ws.ReadJSON(&raw); err != nil {
 			log.Println("Read error:", err)
 			break
 		}
 
-		switch msg.Type {
+		msgType, _ := raw["type"].(string)
 
-		// ===== REGISTER =====
-		case "register":
-			storage.Mutex.Lock()
+		switch msgType {
 
-			client.ID = msg.From
-			client.PubKey = msg.PubKey
-			storage.Clients[client.ID] = &client
+		// ================= PUBKEY =================
+		case "set_pubkey":
 
-			log.Println("User connected:", client.ID)
+			pubKey, _ := raw["pubKey"].(string)
 
-			// 🔥 отправляем ВСЕ отложенные сообщения (и pubkey тоже)
-			if msgs, ok := Pending[client.ID]; ok {
-				for _, m := range msgs {
-					log.Println("Delivering pending", m.Type, "from", m.From, "to", client.ID)
-					client.Conn.WriteJSON(m)
+			storage.SavePubKey(userID, pubKey)
+			log.Println("Saved pubkey for", userID)
+
+			// 🔥 рассылаем всем
+			storage.ClientsMutex.Lock()
+			for id, c := range storage.Clients {
+				if id != userID {
+					c.Conn.WriteJSON(map[string]interface{}{
+						"type":   "pubkey",
+						"from":   userID,
+						"pubKey": pubKey,
+					})
 				}
-				delete(Pending, client.ID)
+			}
+			storage.ClientsMutex.Unlock()
+
+		case "get_pubkey":
+
+			target, _ := raw["to"].(string)
+
+			key, _ := storage.GetPubKey(target)
+
+			if key != "" {
+				ws.WriteJSON(map[string]interface{}{
+					"type":   "pubkey",
+					"from":   target,
+					"pubKey": key,
+				})
 			}
 
-			storage.Mutex.Unlock()
+		// ================= MESSAGE =================
+		case "message":
 
-		// ===== PUBKEY + MESSAGE =====
-		case "pubkey", "message":
-			storage.Mutex.Lock()
+			var msg models.Message
+			bytes, _ := json.Marshal(raw)
+			json.Unmarshal(bytes, &msg)
 
+			msg.From = userID
+
+			// 💾 сохраняем
+			storage.SaveMessage(msg)
+
+			// 📤 отправляем получателю
+			storage.ClientsMutex.Lock()
 			receiver, ok := storage.Clients[msg.To]
 
 			if ok {
-				log.Println("Forwarding", msg.Type, "from", msg.From, "to", msg.To)
+				log.Println("Forwarding message from", userID, "to", msg.To)
 				receiver.Conn.WriteJSON(msg)
-			} else {
-				log.Println("User not connected yet, storing", msg.Type, "for", msg.To)
-				Pending[msg.To] = append(Pending[msg.To], msg)
 			}
 
-			storage.Mutex.Unlock()
+			storage.ClientsMutex.Unlock()
 		}
 	}
 
-	// ===== DISCONNECT =====
-	storage.Mutex.Lock()
-	delete(storage.Clients, client.ID)
-	storage.Mutex.Unlock()
+	storage.ClientsMutex.Lock()
+	delete(storage.Clients, userID)
+	storage.ClientsMutex.Unlock()
 
-	log.Println("User disconnected:", client.ID)
+	log.Println("User disconnected:", userID)
 }

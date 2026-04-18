@@ -6,4 +6,4 @@ import (
 )
 
 var Clients = make(map[string]*models.Client)
-var Mutex = sync.Mutex{}
+var ClientsMutex = sync.Mutex{}
