@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-// Генерация ChatID
+// ===== ChatID =====
 func GetChatID(a, b string) string {
 	if a < b {
 		return a + ":" + b
@@ -14,24 +14,35 @@ func GetChatID(a, b string) string {
 	return b + ":" + a
 }
 
-// Сохранение сообщения в БД
+// ===== SAVE MESSAGE =====
 func SaveMessage(msg models.Message) {
+
 	chatID := GetChatID(msg.From, msg.To)
 
 	_, err := database.DB.Exec(`
-		INSERT INTO messages (chat_id, sender, receiver, data, iv, enc_key)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, chatID, msg.From, msg.To, msg.Data, msg.IV, msg.Key)
+		INSERT INTO messages 
+		(chat_id, sender, receiver, data, iv, key_sender, key_receiver)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`,
+		chatID,
+		msg.From,
+		msg.To,
+		msg.Data,
+		msg.IV,
+		msg.KeySender,
+		msg.KeyReceiver,
+	)
 
 	if err != nil {
-		log.Println("❌ DB save error:", err)
+		log.Println("❌ SaveMessage error:", err)
 	}
 }
 
-// Получение истории чата
+// ===== GET MESSAGES =====
 func GetMessages(chatID string) ([]models.Message, error) {
+
 	rows, err := database.DB.Query(`
-		SELECT sender, receiver, data, iv, enc_key
+		SELECT sender, receiver, data, iv, key_sender, key_receiver
 		FROM messages
 		WHERE chat_id = ?
 		ORDER BY created_at ASC
@@ -52,13 +63,17 @@ func GetMessages(chatID string) ([]models.Message, error) {
 			&msg.To,
 			&msg.Data,
 			&msg.IV,
-			&msg.Key,
+			&msg.KeySender,
+			&msg.KeyReceiver,
 		)
 
 		if err != nil {
 			log.Println("❌ Scan error:", err)
 			continue
 		}
+
+		// важно: чтобы фронт понимал тип
+		msg.Type = "message"
 
 		messages = append(messages, msg)
 	}

@@ -29,7 +29,8 @@ func createTables() {
 		receiver TEXT,
 		data TEXT,
 		iv TEXT,
-		enc_key TEXT,
+		key_sender TEXT,
+		key_receiver TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 

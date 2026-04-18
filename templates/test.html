@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>🔐 Secure Chat FINAL</title>
+<title>🔐 Secure Chat FINAL (Dual Encryption)</title>
 
 <style>
 body { font-family: sans-serif; max-width: 700px; margin: 20px auto; }
@@ -18,7 +18,7 @@ input, button { padding: 8px; margin: 5px; }
 
 <body>
 
-<h2>🔐 Secure Chat (FINAL)</h2>
+<h2>🔐 Secure Chat (Dual Encryption)</h2>
 
 <input id="username" placeholder="username">
 <input id="password" type="password" placeholder="password">
@@ -47,7 +47,6 @@ let rsaKeys = null;
 let publicKeyBase64 = null;
 
 const publicKeys = {};
-const fingerprints = {};
 const pendingMessages = {};
 
 const logDiv = document.getElementById("log");
@@ -69,12 +68,6 @@ function fromB64(str) {
     const arr = new Uint8Array(bin.length);
     for (let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
     return arr;
-}
-
-// ===== FINGERPRINT =====
-async function getFingerprint(keyBuffer) {
-    const hash = await crypto.subtle.digest("SHA-256", keyBuffer);
-    return toB64(hash);
 }
 
 // ===== RSA INIT =====
@@ -123,12 +116,13 @@ async function initRSA() {
     log("🔑 Keys generated");
 }
 
-// ===== CRYPTO =====
-async function encryptMessage(text, pubKey) {
+// ===== ENCRYPT (DUAL) =====
+async function encryptDual(text, receiverPubKey) {
+
     const aes = await crypto.subtle.generateKey(
         { name:"AES-GCM", length:256 },
         true,
-        ["encrypt"]
+        ["encrypt","decrypt"]
     );
 
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -139,72 +133,90 @@ async function encryptMessage(text, pubKey) {
         new TextEncoder().encode(text)
     );
 
-    const raw = await crypto.subtle.exportKey("raw", aes);
+    const rawAES = await crypto.subtle.exportKey("raw", aes);
 
-    const encKey = await crypto.subtle.encrypt(
+    // 🔑 ключ для получателя
+    const keyReceiver = await crypto.subtle.encrypt(
         { name:"RSA-OAEP" },
-        pubKey,
-        raw
+        receiverPubKey,
+        rawAES
+    );
+
+    // 🔑 ключ для отправителя (ВАЖНО!)
+    const keySender = await crypto.subtle.encrypt(
+        { name:"RSA-OAEP" },
+        rsaKeys.publicKey,
+        rawAES
     );
 
     return {
         data: toB64(cipher),
         iv: toB64(iv),
-        key: toB64(encKey)
+        key_sender: toB64(keySender),
+        key_receiver: toB64(keyReceiver)
     };
+}
+
+// ===== DECRYPT =====
+async function decryptMessage(msg) {
+    try {
+        const keyToUse = (msg.from === userId)
+            ? msg.key_sender
+            : msg.key_receiver;
+
+        const aesRaw = await crypto.subtle.decrypt(
+            { name:"RSA-OAEP" },
+            rsaKeys.privateKey,
+            fromB64(keyToUse)
+        );
+
+        const aes = await crypto.subtle.importKey(
+            "raw",
+            aesRaw,
+            { name:"AES-GCM" },
+            true,
+            ["decrypt"]
+        );
+
+        const plain = await crypto.subtle.decrypt(
+            { name:"AES-GCM", iv: fromB64(msg.iv) },
+            aes,
+            fromB64(msg.data)
+        );
+
+        return new TextDecoder().decode(plain);
+
+    } catch {
+        return null;
+    }
 }
 
 // ===== HISTORY =====
 async function loadHistory(target) {
+
     log("⏳ Loading history...", "msg-history");
 
     const res = await fetch(`http://localhost:8080/history?to=${target}`, {
-        headers: {
-            "Authorization": "Bearer " + token
-        }
+        headers:{ "Authorization":"Bearer " + token }
     });
-
-    if (!res.ok) {
-        log("❌ Failed to load history", "msg-error");
-        return;
-    }
 
     const messages = await res.json();
 
     for (let m of messages) {
-        try {
-            const aesRaw = await crypto.subtle.decrypt(
-                { name:"RSA-OAEP" },
-                rsaKeys.privateKey,
-                fromB64(m.key)
-            );
 
-            const aes = await crypto.subtle.importKey(
-                "raw",
-                aesRaw,
-                { name:"AES-GCM" },
-                true,
-                ["decrypt"]
-            );
+        const text = await decryptMessage(m);
 
-            const plain = await crypto.subtle.decrypt(
-                { name:"AES-GCM", iv: fromB64(m.iv) },
-                aes,
-                fromB64(m.data)
-            );
-
-            const text = new TextDecoder().decode(plain);
-
+        if (text) {
             log(`<b>${m.from}:</b> ${text}`, "msg-history");
-
-        } catch {
-            log("⚠️ Cannot decrypt old message", "msg-warn");
+        } else {
+            log("⚠️ Cannot decrypt message", "msg-warn");
         }
     }
 }
 
 // ===== LOGIN =====
 async function login() {
+
     const res = await fetch("http://localhost:8080/login", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -228,11 +240,13 @@ async function login() {
 
 // ===== CONNECT =====
 function connect() {
+
     const target = targetInput.value;
 
     ws = new WebSocket(`ws://localhost:8080/ws?token=${token}`);
 
     ws.onopen = () => {
+
         log("🟢 Connected");
 
         ws.send(JSON.stringify({
@@ -249,63 +263,29 @@ function connect() {
     };
 
     ws.onmessage = async (e) => {
+
         const d = JSON.parse(e.data);
 
         if (d.type === "pubkey") {
-            const raw = fromB64(d.pubKey);
-            const fp = await getFingerprint(raw);
-
-            if (fingerprints[d.from] && fingerprints[d.from] !== fp) {
-                log("⚠️ Key changed!", "msg-warn");
-            }
-
-            fingerprints[d.from] = fp;
 
             publicKeys[d.from] = await crypto.subtle.importKey(
                 "spki",
-                raw,
+                fromB64(d.pubKey),
                 { name:"RSA-OAEP", hash:"SHA-256" },
                 true,
                 ["encrypt"]
             );
 
             log("🔑 Key ready: " + d.from);
-
-            if (pendingMessages[d.from]) {
-                for (let msg of pendingMessages[d.from]) {
-                    sendMessage(msg, d.from);
-                }
-                delete pendingMessages[d.from];
-            }
         }
 
         if (d.type === "message") {
-            try {
-                const aesRaw = await crypto.subtle.decrypt(
-                    { name:"RSA-OAEP" },
-                    rsaKeys.privateKey,
-                    fromB64(d.key)
-                );
 
-                const aes = await crypto.subtle.importKey(
-                    "raw",
-                    aesRaw,
-                    { name:"AES-GCM" },
-                    true,
-                    ["decrypt"]
-                );
+            const text = await decryptMessage(d);
 
-                const plain = await crypto.subtle.decrypt(
-                    { name:"AES-GCM", iv: fromB64(d.iv) },
-                    aes,
-                    fromB64(d.data)
-                );
-
-                const text = new TextDecoder().decode(plain);
-
+            if (text) {
                 log(`<b>${d.from}:</b> ${text}`, "msg-other");
-
-            } catch {
+            } else {
                 log("❌ Decrypt error", "msg-error");
             }
         }
@@ -313,36 +293,20 @@ function connect() {
 }
 
 // ===== SEND =====
-function send() {
+async function send() {
+
     const text = messageInput.value;
     const target = targetInput.value;
 
     if (!text || !target) return;
 
-    sendMessage(text, target);
-    messageInput.value = "";
-}
-
-async function sendMessage(text, target) {
-
     if (!publicKeys[target]) {
         log("⏳ Waiting for key...");
-
-        if (!pendingMessages[target]) {
-            pendingMessages[target] = [];
-        }
-
-        pendingMessages[target].push(text);
-
-        ws.send(JSON.stringify({
-            type:"get_pubkey",
-            to: target
-        }));
-
+        ws.send(JSON.stringify({ type:"get_pubkey", to: target }));
         return;
     }
 
-    const encrypted = await encryptMessage(text, publicKeys[target]);
+    const encrypted = await encryptDual(text, publicKeys[target]);
 
     ws.send(JSON.stringify({
         type:"message",
@@ -351,6 +315,8 @@ async function sendMessage(text, target) {
     }));
 
     log(`<b>Me:</b> ${text}`, "msg-me");
+
+    messageInput.value = "";
 }
 </script>
 

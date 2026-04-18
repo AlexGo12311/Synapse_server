@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -17,7 +18,6 @@ var upgrader = websocket.Upgrader{
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
 
-	// ===== JWT ИЗ HEADER =====
 	tokenString := r.URL.Query().Get("token")
 	if tokenString == "" {
 		http.Error(w, "Missing token", http.StatusUnauthorized)
@@ -30,7 +30,6 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ===== UPGRADE =====
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
@@ -43,49 +42,72 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		Conn: ws,
 	}
 
-	// ===== CONNECT =====
 	storage.ClientsMutex.Lock()
 	storage.Clients[userID] = &client
 	storage.ClientsMutex.Unlock()
 
 	log.Println("User connected:", userID)
 
-	// ===== READ LOOP =====
 	for {
-		var msg models.Message
+		var raw map[string]interface{}
 
-		err := ws.ReadJSON(&msg)
-		if err != nil {
+		if err := ws.ReadJSON(&raw); err != nil {
 			log.Println("Read error:", err)
 			break
 		}
 
-		msg.From = userID
+		msgType, _ := raw["type"].(string)
 
-		switch msg.Type {
+		switch msgType {
 
+		// ================= PUBKEY =================
 		case "set_pubkey":
-			storage.SavePubKey(userID, msg.PubKey)
+
+			pubKey, _ := raw["pubKey"].(string)
+
+			storage.SavePubKey(userID, pubKey)
 			log.Println("Saved pubkey for", userID)
 
+			// 🔥 рассылаем всем
+			storage.ClientsMutex.Lock()
+			for id, c := range storage.Clients {
+				if id != userID {
+					c.Conn.WriteJSON(map[string]interface{}{
+						"type":   "pubkey",
+						"from":   userID,
+						"pubKey": pubKey,
+					})
+				}
+			}
+			storage.ClientsMutex.Unlock()
+
 		case "get_pubkey":
-			key, _ := storage.GetPubKey(msg.To)
+
+			target, _ := raw["to"].(string)
+
+			key, _ := storage.GetPubKey(target)
 
 			if key != "" {
-				ws.WriteJSON(models.Message{
-					Type:   "pubkey",
-					From:   msg.To,
-					To:     userID,
-					PubKey: key,
+				ws.WriteJSON(map[string]interface{}{
+					"type":   "pubkey",
+					"from":   target,
+					"pubKey": key,
 				})
 			}
 
+		// ================= MESSAGE =================
 		case "message":
 
-			// сохранить в БД
+			var msg models.Message
+			bytes, _ := json.Marshal(raw)
+			json.Unmarshal(bytes, &msg)
+
+			msg.From = userID
+
+			// 💾 сохраняем
 			storage.SaveMessage(msg)
 
-			// отправить если онлайн
+			// 📤 отправляем получателю
 			storage.ClientsMutex.Lock()
 			receiver, ok := storage.Clients[msg.To]
 
@@ -98,7 +120,6 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// ===== DISCONNECT =====
 	storage.ClientsMutex.Lock()
 	delete(storage.Clients, userID)
 	storage.ClientsMutex.Unlock()
