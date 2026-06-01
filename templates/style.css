@@ -51,9 +51,9 @@ body {
 .btn-register { background: #28a745; color: white; }
 #authError { color: #dc3545; font-size: 13px; min-height: 20px; margin-top: 8px; font-weight: 500; }
 
-/* ===== ЭКРАН МЕССЕНДЖЕРА (НА ВЕСЬ ЭКРАН) ===== */
+/* ===== ЭКРАН МЕССЕНДЖЕРА ===== */
 #chatScreen { 
-    display: none; /* Переключится на flex через JS */
+    display: none; 
     width: 100vw; 
     height: 100vh; 
     background: white;
@@ -87,15 +87,14 @@ body {
 .chat-area { flex: 1; display: flex; flex-direction: column; background: #f4f6f9; }
 .chat-header { padding: 18px 20px; background: #fff; border-bottom: 1px solid #e0e0e0; font-size: 16px; font-weight: 600; color: #333; }
 
-/* Зона сообщений с текстурным бэкграундом под чат */
 #log { 
     flex: 1; 
     overflow-y: auto; 
     padding: 20px; 
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    background: #e5ddd5; /* Спокойный классический цвет подложки чата */
+    gap: 4px; /* Уменьшили зазор для более плотного отображения */
+    background: #e5ddd5; 
 }
 
 .input-area { display: flex; padding: 15px 20px; border-top: 1px solid #e0e0e0; background: #fff; align-items: center; }
@@ -139,44 +138,75 @@ body {
 .user-item:hover { background: #f8f9fa; }
 .user-item.active { background: #e7f3ff; color: #007bff; font-weight: 600; }
 
-/* ===== СТРУКТУРА БАБЛОВ (ПУЗЫРЕЙ) ===== */
+/* ===== АНИМАЦИЯ ПОЯВЛЕНИЯ В СТИЛЕ WHATSAPP ===== */
+@keyframes waMessagePop {
+    0% {
+        opacity: 0;
+        transform: scale(0.94) translateY(12px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
 .message-row {
     display: flex;
     width: 100%;
     margin-bottom: 2px;
+    /* Применяем анимацию на каждую добавленную строчку */
+    animation: waMessagePop 0.22s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+    will-change: transform, opacity;
 }
-.message-row.me { justify-content: flex-end; } /* Мои сообщения прижимаем вправо */
-.message-row.other { justify-content: flex-start; } /* Собеседника — влево */
+.message-row.me { justify-content: flex-end; } 
+.message-row.other { justify-content: flex-start; } 
 
+/* ===== СТРУКТУРА БАБЛОВ С УЧЕТОМ ВРЕМЕНИ ===== */
 .bubble {
     max-width: 65%;
-    padding: 10px 14px;
-    border-radius: 16px;
+    padding: 8px 12px 5px 14px;
+    border-radius: 12px;
     font-size: 14.5px;
     line-height: 1.4;
     word-wrap: break-word;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    box-shadow: 0 1px 1.5px rgba(0,0,0,0.12);
+    display: flex;
+    flex-direction: column; /* Элементы идут друг за другом вертикально */
 }
 .message-row.me .bubble {
-    background: #d9fdd3; /* Зеленый оттенок для отправленных */
+    background: #d9fdd3; 
     color: #111b21;
-    border-top-right-radius: 4px; /* Небольшой скос для имитации «хвостика» */
+    border-top-right-radius: 0px; /* Фирменный скошенный угол WhatsApp */
 }
 .message-row.other .bubble {
-    background: #ffffff; /* Чистый белый для входящих */
+    background: #ffffff; 
     color: #111b21;
-    border-top-left-radius: 4px;
+    border-top-left-radius: 0px;
 }
 
-/* Системные и сервисные строки (логи генерации ключей, ошибки) */
+.bubble-text {
+    padding-right: 15px; /* Запас справа, чтобы текст не наезжал на время */
+}
+
+/* Стилизация блока с временем */
+.msg-time {
+    font-size: 10.5px;
+    color: #667781;
+    align-self: flex-end; /* Сдвигает время строго в правый нижний угол бабла */
+    margin-top: 2px;
+    user-select: none; /* Запрещаем выделение времени при копировании текста */
+}
+
+/* Системные строки */
 .system-row {
     display: flex;
     justify-content: center;
     width: 100%;
     margin: 8px 0;
+    animation: waMessagePop 0.25s ease-out forwards;
 }
 .system-box {
-    background: rgba(11, 20, 26, 0.12);
+    background: rgba(11, 20, 26, 0.1);
     color: #54656f;
     font-size: 12px;
     padding: 5px 12px;

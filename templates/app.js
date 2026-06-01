@@ -10,25 +10,44 @@ const pendingMessages = {};
 const getLogDiv = () => document.getElementById("log");
 const getAuthErrorDiv = () => document.getElementById("authError");
 
-// ===== УМНЫЙ ЛОГЕР ДЛЯ БАБЛОВ И СИСТЕМНЫХ ТЕКСТОВ =====
-function logMessage(text, type) {
+// ===== ФОРМАТИРОВАНИЕ ВРЕМЕНИ (ЧЧ:ММ) =====
+function formatTime(timeInput) {
+    let d = timeInput ? new Date(timeInput) : new Date();
+    // Проверка на корректность даты (если сервер прислал невалидный формат)
+    if (isNaN(d.getTime())) d = new Date(); 
+    
+    let hours = String(d.getHours()).padStart(2, '0');
+    let minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+}
+
+// ===== УМНЫЙ ЛОГЕР ДЛЯ БАБЛОВ И ВРЕМЕНИ =====
+function logMessage(text, type, timeStr = "") {
     const logDiv = getLogDiv();
     if (!logDiv) return;
 
     const row = document.createElement("div");
 
     if (type === "me" || type === "other") {
-        // Контейнер строки (выравнивание лево/право)
         row.className = `message-row ${type}`;
         
-        // Сам пузырь сообщения
         const bubble = document.createElement("div");
         bubble.className = "bubble";
-        bubble.innerText = text;
         
+        // Блок для текста сообщения
+        const txtSpan = document.createElement("span");
+        txtSpan.className = "bubble-text";
+        txtSpan.innerText = text;
+        
+        // Блок для времени
+        const timeSpan = document.createElement("span");
+        timeSpan.className = "msg-time";
+        timeSpan.innerText = timeStr || formatTime();
+        
+        bubble.appendChild(txtSpan);
+        bubble.appendChild(timeSpan);
         row.appendChild(bubble);
     } else {
-        // Системные уведомления (серые плашки по центру)
         row.className = `system-row ${type === 'error' ? 'error' : ''}`;
         
         const sysBox = document.createElement("div");
@@ -186,8 +205,9 @@ async function loadHistory(target) {
 
             const text = await decryptMessage(m, userId);
             if (text) {
-                // История рендерится как обычные красивые баблы
-                logMessage(text, m.from === userId ? "me" : "other");
+                // Если бэкенд присылает поле времени (например, timestamp или created_at), берем его
+                let timeStr = formatTime(m.timestamp || m.created_at || null);
+                logMessage(text, m.from === userId ? "me" : "other", timeStr);
             }
         }
     } catch {
@@ -237,7 +257,8 @@ function initWebSocket() {
             
             if (d.from === activeTargetId || (d.from === userId && d.to === activeTargetId)) {
                 if (text) {
-                    logMessage(text, d.from === userId ? "me" : "other");
+                    let timeStr = formatTime(d.timestamp || d.created_at || null);
+                    logMessage(text, d.from === userId ? "me" : "other", timeStr);
                 }
             } else {
                 const sideBtn = document.getElementById("user-btn-" + d.from);
@@ -262,7 +283,7 @@ async function sendQueuedMessage(text, target) {
         ...encrypted
     }));
     
-    if(target === activeTargetId) logMessage(text, "me");
+    if(target === activeTargetId) logMessage(text, "me", formatTime());
 }
 
 // ===== SEND =====
@@ -292,7 +313,7 @@ async function send() {
         ...encrypted
     }));
 
-    logMessage(text, "me");
+    logMessage(text, "me", formatTime());
     messageInput.value = "";
 }
 
