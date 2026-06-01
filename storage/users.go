@@ -102,3 +102,37 @@ func GetPubKey(userID string) (string, error) {
 	}
 	return "", nil
 }
+
+// GetAllUsers возвращает список всех пользователей
+func GetAllUsers() ([]models.User, error) {
+
+	rows, err := database.DB.Query(`
+		SELECT id, username
+		FROM users
+		ORDER BY username ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.User
+
+	for rows.Next() {
+
+		var user models.User
+
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+		)
+
+		if err != nil {
+			continue
+		}
+
+		users = append(users, user)
+	}
+
+	return users, nil
+}

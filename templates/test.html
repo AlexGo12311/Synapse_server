@@ -3,55 +3,60 @@
 <head>
 <meta charset="UTF-8">
 <title>🔐 Secure Chat FINAL (Dual Encryption)</title>
+<script src="crypto.js"></script>
 
 <style>
-body { font-family: sans-serif; max-width: 700px; margin: 20px auto; }
-#log { height: 320px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #fafafa;}
+body { font-family: sans-serif; max-width: 900px; margin: 20px auto; display: flex; flex-direction: column; height: 90vh; }
+.auth-panel { margin-bottom: 15px; padding: 10px; background: #eee; border-radius: 4px; }
+.messenger { display: flex; flex: 1; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
+.sidebar { width: 250px; border-right: 1px solid #ccc; background: #f7f7f7; display: flex; flex-direction: column; overflow-y: auto; }
+.chat-area { flex: 1; display: flex; flex-direction: column; padding: 15px; background: #fff; }
+#log { flex: 1; overflow-y: auto; border: 1px solid #eee; padding: 10px; background: #fafafa; margin-bottom: 10px; }
 input, button { padding: 8px; margin: 5px; }
-.msg-me { color: green; }
-.msg-other { color: blue; }
-.msg-error { color: red; }
-.msg-warn { color: orange; }
-.msg-history { color: gray; }
+.user-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #e0e0e0; text-align: left; background: none; border: none; width: 100%; font-size: 14px; }
+.user-item:hover { background: #eaeaea; }
+.user-item.active { background: #007bff; color: white; font-weight: bold; }
+.msg-me { color: green; margin-bottom: 5px; }
+.msg-other { color: blue; margin-bottom: 5px; }
+.msg-error { color: red; margin-bottom: 5px; }
+.msg-warn { color: orange; margin-bottom: 5px; }
+.msg-history { color: gray; margin-bottom: 5px; }
 </style>
 </head>
 
 <body>
 
-<h2>🔐 Secure Chat (Dual Encryption)</h2>
+<h2>🔐 Secure Chat Workspace</h2>
 
-<input id="username" placeholder="username">
-<input id="password" type="password" placeholder="password">
-<button onclick="login()">Login</button>
+<div class="auth-panel">
+    <input id="username" placeholder="username">
+    <input id="password" type="password" placeholder="password">
+    <button onclick="login()">Login</button>
+    <span>Your ID: <b id="myId">-</b></span>
+</div>
 
-<p>Your ID: <b id="myId">-</b></p>
-
-<hr>
-
-<input id="targetInput" placeholder="Target user ID">
-<button onclick="connect()">Connect</button>
-
-<hr>
-
-<div id="log"></div>
-
-<input id="messageInput" placeholder="Message...">
-<button onclick="send()">Send</button>
+<div class="messenger">
+    <div class="sidebar" id="usersList">
+        <div style="padding: 10px; color: #888; text-align: center;">Log in to view users</div>
+    </div>
+    
+    <div class="chat-area">
+        <h3 style="margin-top: 0;">Chatting with: <span id="activeChatTarget" style="color: #007bff;">None</span></h3>
+        <div id="log"></div>
+        <div style="display: flex;">
+            <input id="messageInput" placeholder="Message..." style="flex: 1;" onkeydown="if(event.key==='Enter') send()">
+            <button onclick="send()">Send</button>
+        </div>
+    </div>
+</div>
 
 <script>
-const shownMessages = new Set();
-
-function generateMessageId() {
-    return crypto.randomUUID();
-}
-
 let token = null;
 let userId = null;
 let ws = null;
+let activeTargetId = null;
 
-let rsaKeys = null;
-let publicKeyBase64 = null;
-
+const shownMessages = new Set();
 const publicKeys = {};
 const pendingMessages = {};
 
@@ -65,170 +70,87 @@ function log(t, c="") {
     logDiv.scrollTop = logDiv.scrollHeight;
 }
 
-// ===== BASE64 =====
-function toB64(buf) {
-    return btoa(String.fromCharCode(...new Uint8Array(buf)));
-}
-function fromB64(str) {
-    const bin = atob(str);
-    const arr = new Uint8Array(bin.length);
-    for (let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
-    return arr;
-}
+// ===== ВЫБОР ПОЛЬЗОВАТЕЛЯ ИЗ СПИСКА =====
+function selectUser(targetId, targetName) {
+    if (targetId === activeTargetId) return;
+    
+    activeTargetId = targetId;
+    document.getElementById("activeChatTarget").innerText = targetName;
+    
+    // Подсвечиваем активного пользователя в списке
+    document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
+    const activeBtn = document.getElementById("user-btn-" + targetId);
+    if (activeBtn) activeBtn.classList.add('active');
 
-// ===== RSA INIT =====
-async function initRSA() {
-    const keyName = "rsaKeys_" + userId;
-    const saved = localStorage.getItem(keyName);
+    // Сбрасываем контекст окна сообщений
+    logDiv.innerHTML = "";
+    shownMessages.clear();
 
-    if (saved) {
-        const p = JSON.parse(saved);
-
-        rsaKeys = {
-            privateKey: await crypto.subtle.importKey(
-                "jwk", p.privateKey,
-                { name:"RSA-OAEP", hash:"SHA-256" },
-                true, ["decrypt"]
-            ),
-            publicKey: await crypto.subtle.importKey(
-                "spki", fromB64(p.publicKey),
-                { name:"RSA-OAEP", hash:"SHA-256" },
-                true, ["encrypt"]
-            )
-        };
-
-        publicKeyBase64 = p.publicKey;
-        log("🔑 Keys loaded");
-        return;
+    // Запрашиваем актуальный ключ и историю для выбранного собеседника
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: "get_pubkey",
+            to: activeTargetId
+        }));
     }
-
-    rsaKeys = await crypto.subtle.generateKey({
-        name:"RSA-OAEP",
-        modulusLength:2048,
-        publicExponent:new Uint8Array([1,0,1]),
-        hash:"SHA-256"
-    }, true, ["encrypt","decrypt"]);
-
-    const pub = await crypto.subtle.exportKey("spki", rsaKeys.publicKey);
-    const priv = await crypto.subtle.exportKey("jwk", rsaKeys.privateKey);
-
-    publicKeyBase64 = toB64(pub);
-
-    localStorage.setItem(keyName, JSON.stringify({
-        publicKey: publicKeyBase64,
-        privateKey: priv
-    }));
-
-    log("🔑 Keys generated");
+    loadHistory(activeTargetId);
 }
 
-// ===== ENCRYPT (DUAL) =====
-async function encryptDual(text, receiverPubKey) {
-
-    const aes = await crypto.subtle.generateKey(
-        { name:"AES-GCM", length:256 },
-        true,
-        ["encrypt","decrypt"]
-    );
-
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-
-    const cipher = await crypto.subtle.encrypt(
-        { name:"AES-GCM", iv },
-        aes,
-        new TextEncoder().encode(text)
-    );
-
-    const rawAES = await crypto.subtle.exportKey("raw", aes);
-
-    // 🔑 ключ для получателя
-    const keyReceiver = await crypto.subtle.encrypt(
-        { name:"RSA-OAEP" },
-        receiverPubKey,
-        rawAES
-    );
-
-    // 🔑 ключ для отправителя (ВАЖНО!)
-    const keySender = await crypto.subtle.encrypt(
-        { name:"RSA-OAEP" },
-        rsaKeys.publicKey,
-        rawAES
-    );
-
-    return {
-        data: toB64(cipher),
-        iv: toB64(iv),
-        key_sender: toB64(keySender),
-        key_receiver: toB64(keyReceiver)
-    };
-}
-
-// ===== DECRYPT =====
-async function decryptMessage(msg) {
+// ===== ЗАГРУЗКА СПИСКА ПОЛЬЗОВАТЕЛЕЙ =====
+async function loadUsersList() {
     try {
-        const keyToUse = (msg.from === userId)
-            ? msg.key_sender
-            : msg.key_receiver;
+        const res = await fetch("http://localhost:8080/users", {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        const users = await res.json();
+        const listContainer = document.getElementById("usersList");
+        listContainer.innerHTML = "";
 
-        const aesRaw = await crypto.subtle.decrypt(
-            { name:"RSA-OAEP" },
-            rsaKeys.privateKey,
-            fromB64(keyToUse)
-        );
-
-        const aes = await crypto.subtle.importKey(
-            "raw",
-            aesRaw,
-            { name:"AES-GCM" },
-            true,
-            ["decrypt"]
-        );
-
-        const plain = await crypto.subtle.decrypt(
-            { name:"AES-GCM", iv: fromB64(msg.iv) },
-            aes,
-            fromB64(msg.data)
-        );
-
-        return new TextDecoder().decode(plain);
-
-    } catch {
-        return null;
+        users.forEach(u => {
+            if (u.id === userId) return; // Себя в список не добавляем
+            
+            const btn = document.createElement("button");
+            btn.className = "user-item";
+            btn.id = "user-btn-" + u.id;
+            btn.innerText = "👤 " + u.username;
+            btn.onclick = () => selectUser(u.id, u.username);
+            listContainer.appendChild(btn);
+        });
+    } catch (err) {
+        log("❌ Failed to load users list", "msg-error");
     }
 }
 
 // ===== HISTORY =====
 async function loadHistory(target) {
-
     log("⏳ Loading history...", "msg-history");
+    try {
+        const res = await fetch(`http://localhost:8080/history?to=${target}`, {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        const messages = await res.json();
 
-    const res = await fetch(`http://localhost:8080/history?to=${target}`, {
-        headers:{ "Authorization":"Bearer " + token }
-    });
+        for (let m of messages) {
+            if (shownMessages.has(m.id)) continue;
+            shownMessages.add(m.id);
 
-    const messages = await res.json();
-
-    for (let m of messages) {
-
-        if (shownMessages.has(m.id)) continue;
-        shownMessages.add(m.id);
-
-        const text = await decryptMessage(m);
-
-        if (text) {
-            log(`<b>${m.from}:</b> ${text}`, "msg-history");
-        } else {
-            log("⚠️ Cannot decrypt message", "msg-warn");
+            const text = await decryptMessage(m, userId);
+            if (text) {
+                log(`<b>${m.from === userId ? 'Me' : m.from}:</b> ${text}`, "msg-history");
+            } else {
+                log("⚠️ Cannot decrypt message", "msg-warn");
+            }
         }
+    } catch {
+        log("❌ Error loading history", "msg-error");
     }
 }
 
 // ===== LOGIN =====
 async function login() {
-
     const res = await fetch("http://localhost:8080/login", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             username: username.value,
             password: password.value
@@ -236,68 +158,49 @@ async function login() {
     });
 
     const data = await res.json();
-
     token = data.token;
     userId = data.id;
-
     myId.innerText = userId;
 
-    await initRSA();
-
+    const keyStatus = await initRSA(userId);
+    log(`🔑 Keys ${keyStatus}`);
     log("✅ Logged in");
+
+    // Загружаем список контактов и открываем один постоянный сокет
+    await loadUsersList();
+    initWebSocket();
 }
 
-// ===== CONNECT =====
-function connect() {
-
-    const target = targetInput.value;
-
+// ===== ИНИЦИАЛИЗАЦИЯ WEBSOCKET =====
+function initWebSocket() {
     ws = new WebSocket(`ws://localhost:8080/ws?token=${token}`);
 
     ws.onopen = () => {
-
-        log("🟢 Connected");
-
+        log("🟢 Connected to WebSocket");
         ws.send(JSON.stringify({
-            type:"set_pubkey",
+            type: "set_pubkey",
             pubKey: publicKeyBase64
         }));
-
-        ws.send(JSON.stringify({
-            type:"get_pubkey",
-            to: target
-        }));
-
-        loadHistory(target);
     };
 
     ws.onmessage = async (e) => {
-
         const d = JSON.parse(e.data);
 
-        // Получение подтверждения от сервера
-        if (d.type === "message_saved") {
-            // В будущем здесь можно менять статус сообщения на "✓"
-            return;
-        }
+        if (d.type === "message_saved") return;
 
         if (d.type === "pubkey") {
-
             publicKeys[d.from] = await crypto.subtle.importKey(
                 "spki",
                 fromB64(d.pubKey),
-                { name:"RSA-OAEP", hash:"SHA-256" },
+                { name: "RSA-OAEP", hash: "SHA-256" },
                 true,
                 ["encrypt"]
             );
+            log("🔑 Key ready for room: " + d.from);
 
-            log("🔑 Key ready: " + d.from);
-
-            // Проверяем, есть ли сообщения в очереди для этого пользователя
             if (pendingMessages[d.from]) {
                 const queue = [...pendingMessages[d.from]];
                 delete pendingMessages[d.from];
-
                 for (const text of queue) {
                     await sendQueuedMessage(text, d.from);
                 }
@@ -305,16 +208,24 @@ function connect() {
         }
 
         if (d.type === "message") {
-
             if (shownMessages.has(d.id)) return;
             shownMessages.add(d.id);
 
-            const text = await decryptMessage(d);
-
-            if (text) {
-                log(`<b>${d.from}:</b> ${text}`, "msg-other");
+            const text = await decryptMessage(d, userId);
+            
+            // Отображаем сообщение только если оно относится к открытому сейчас чату
+            if (d.from === activeTargetId || (d.from === userId && d.to === activeTargetId)) {
+                if (text) {
+                    log(`<b>${d.from === userId ? 'Me' : d.from}:</b> ${text}`, d.from === userId ? "msg-me" : "msg-other");
+                } else {
+                    log("❌ Decrypt error", "msg-error");
+                }
             } else {
-                log("❌ Decrypt error", "msg-error");
+                // Если сообщение пришло из фонового чата, можно сделать пуш/нотификацию рядом с именем
+                const sideBtn = document.getElementById("user-btn-" + d.from);
+                if (sideBtn && !sideBtn.innerText.includes("✉️")) {
+                    sideBtn.innerText += " ✉️";
+                }
             }
         }
     };
@@ -324,7 +235,6 @@ function connect() {
 async function sendQueuedMessage(text, target) {
     const encrypted = await encryptDual(text, publicKeys[target]);
     const messageId = generateMessageId();
-    
     shownMessages.add(messageId);
 
     ws.send(JSON.stringify({
@@ -333,36 +243,27 @@ async function sendQueuedMessage(text, target) {
         to: target,
         ...encrypted
     }));
-
-    log(`<b>Me:</b> ${text}`, "msg-me");
+    
+    if(target === activeTargetId) log(`<b>Me:</b> ${text}`, "msg-me");
 }
 
 // ===== SEND =====
 async function send() {
-
     const text = messageInput.value;
-    const target = targetInput.value;
+    const target = activeTargetId;
 
     if (!text || !target) return;
 
     if (!publicKeys[target]) {
         log("⏳ Waiting for key... (Message queued)");
-        
-        if (!pendingMessages[target]) {
-            pendingMessages[target] = [];
-        }
-        
+        if (!pendingMessages[target]) pendingMessages[target] = [];
         pendingMessages[target].push(text);
-
-        ws.send(JSON.stringify({ type:"get_pubkey", to: target }));
-        
-        // Очищаем инпут, чтобы пользователь не нажал кнопку дважды
-        messageInput.value = ""; 
+        ws.send(JSON.stringify({ type: "get_pubkey", to: target }));
+        messageInput.value = "";
         return;
     }
 
     const encrypted = await encryptDual(text, publicKeys[target]);
-
     const messageId = generateMessageId();
     shownMessages.add(messageId);
 
@@ -374,7 +275,6 @@ async function send() {
     }));
 
     log(`<b>Me:</b> ${text}`, "msg-me");
-
     messageInput.value = "";
 }
 </script>

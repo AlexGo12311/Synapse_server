@@ -35,6 +35,7 @@ func main() {
 	mux.HandleFunc("/login", handlers.Login)
 	mux.HandleFunc("/ws", handlers.HandleConnections)
 	mux.Handle("/history", middlewares.AuthMiddleware(http.HandlerFunc(handlers.GetHistory)))
+	mux.Handle("/users", middlewares.AuthMiddleware(http.HandlerFunc(handlers.GetUsers)))
 
 	log.Println("Server running on :8080")
 	http.ListenAndServe(":8080", enableCORS(mux))
