@@ -7,19 +7,39 @@ const shownMessages = new Set();
 const publicKeys = {};
 const pendingMessages = {};
 
-// Используем геттеры, чтобы гарантированно получать элементы после загрузки DOM
 const getLogDiv = () => document.getElementById("log");
 const getAuthErrorDiv = () => document.getElementById("authError");
 
-function log(t, c="") {
-    const el = document.createElement("div");
-    el.className = c;
-    el.innerHTML = t;
+// ===== УМНЫЙ ЛОГЕР ДЛЯ БАБЛОВ И СИСТЕМНЫХ ТЕКСТОВ =====
+function logMessage(text, type) {
     const logDiv = getLogDiv();
-    if(logDiv) {
-        logDiv.appendChild(el);
-        logDiv.scrollTop = logDiv.scrollHeight;
+    if (!logDiv) return;
+
+    const row = document.createElement("div");
+
+    if (type === "me" || type === "other") {
+        // Контейнер строки (выравнивание лево/право)
+        row.className = `message-row ${type}`;
+        
+        // Сам пузырь сообщения
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.innerText = text;
+        
+        row.appendChild(bubble);
+    } else {
+        // Системные уведомления (серые плашки по центру)
+        row.className = `system-row ${type === 'error' ? 'error' : ''}`;
+        
+        const sysBox = document.createElement("div");
+        sysBox.className = "system-box";
+        sysBox.innerText = text;
+        
+        row.appendChild(sysBox);
     }
+
+    logDiv.appendChild(row);
+    logDiv.scrollTop = logDiv.scrollHeight;
 }
 
 // ===== РЕГИСТРАЦИЯ =====
@@ -47,7 +67,6 @@ async function register() {
             return;
         }
 
-        // Если регистрация успешна, сразу логинимся
         await login();
     } catch (err) {
         authErrorDiv.innerText = "Server connection error";
@@ -83,13 +102,12 @@ async function login() {
         token = data.token;
         userId = data.id;
         
-        // Переключение экранов
         document.getElementById("authScreen").style.display = "none";
         document.getElementById("chatScreen").style.display = "flex";
         document.getElementById("myUsernameDisplay").innerText = u;
 
         const keyStatus = await initRSA(userId);
-        log(`🔑 Keys ${keyStatus}`, "msg-history");
+        logMessage(`🔑 Keys ${keyStatus}`, "system");
 
         await loadUsersList();
         initWebSocket();
@@ -105,7 +123,6 @@ function selectUser(targetId, targetName) {
     activeTargetId = targetId;
     document.getElementById("activeChatTarget").innerText = targetName;
     
-    // Разблокируем поле ввода
     document.getElementById("messageInput").disabled = false;
     document.getElementById("sendBtn").disabled = false;
     
@@ -149,7 +166,7 @@ async function loadUsersList() {
             listContainer.appendChild(btn);
         });
     } catch (err) {
-        log("❌ Failed to load users list", "msg-error");
+        logMessage("❌ Failed to load users list", "error");
     }
 }
 
@@ -169,11 +186,12 @@ async function loadHistory(target) {
 
             const text = await decryptMessage(m, userId);
             if (text) {
-                log(`<b>${m.from === userId ? 'Me' : m.from}:</b> ${text}`, "msg-history");
+                // История рендерится как обычные красивые баблы
+                logMessage(text, m.from === userId ? "me" : "other");
             }
         }
     } catch {
-        log("❌ Error loading history", "msg-error");
+        logMessage("❌ Error loading history", "error");
     }
 }
 
@@ -219,7 +237,7 @@ function initWebSocket() {
             
             if (d.from === activeTargetId || (d.from === userId && d.to === activeTargetId)) {
                 if (text) {
-                    log(`<b>${d.from === userId ? 'Me' : d.from}:</b> ${text}`, d.from === userId ? "msg-me" : "msg-other");
+                    logMessage(text, d.from === userId ? "me" : "other");
                 }
             } else {
                 const sideBtn = document.getElementById("user-btn-" + d.from);
@@ -244,7 +262,7 @@ async function sendQueuedMessage(text, target) {
         ...encrypted
     }));
     
-    if(target === activeTargetId) log(`<b>Me:</b> ${text}`, "msg-me");
+    if(target === activeTargetId) logMessage(text, "me");
 }
 
 // ===== SEND =====
@@ -274,19 +292,17 @@ async function send() {
         ...encrypted
     }));
 
-    log(`<b>Me:</b> ${text}`, "msg-me");
+    logMessage(text, "me");
     messageInput.value = "";
 }
 
 // ===== ВЫХОД =====
 function logout() {
-    // 1. Закрываем WebSocket соединение
     if (ws) {
         ws.close();
         ws = null;
     }
 
-    // 2. Очищаем глобальные переменные
     token = null;
     userId = null;
     activeTargetId = null;
@@ -294,19 +310,17 @@ function logout() {
     for (let key in publicKeys) delete publicKeys[key];
     shownMessages.clear();
 
-    // 3. Очищаем интерфейс
     getLogDiv().innerHTML = "";
     document.getElementById("usersList").innerHTML = "";
     document.getElementById("activeChatTarget").innerText = "Select a user";
-    document.getElementById("messageInput").value = "";
-    document.getElementById("messageInput").disabled = true;
+    
+    const messageInput = document.getElementById("messageInput");
+    messageInput.value = "";
+    messageInput.disabled = true;
     document.getElementById("sendBtn").disabled = true;
-    document.getElementById("authPassword").value = ""; // Стираем введенный пароль
+    document.getElementById("authPassword").value = ""; 
     getAuthErrorDiv().innerText = "";
 
-    // 4. Переключаем экраны обратно
     document.getElementById("chatScreen").style.display = "none";
     document.getElementById("authScreen").style.display = "block";
-    
-    log("Осуществлен выход из аккаунта", "msg-history");
 }
