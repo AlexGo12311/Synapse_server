@@ -1,0 +1,106 @@
+body { 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+    margin: 0; 
+    padding: 0;
+    background: #f0f2f5; 
+    height: 100vh; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+}
+
+/* ===== ЭКРАН АВТОРИЗАЦИИ ===== */
+#authScreen {
+    background: white;
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    width: 300px;
+    text-align: center;
+}
+#authScreen h2 { margin-top: 0; color: #333; }
+#authScreen input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+.auth-buttons { display: flex; gap: 10px; margin-top: 15px; }
+.auth-buttons button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.btn-login { background: #007bff; color: white; }
+.btn-login:hover { background: #0056b3; }
+.btn-register { background: #28a745; color: white; }
+.btn-register:hover { background: #218838; }
+#authError { color: red; font-size: 14px; min-height: 20px; margin-top: 5px; }
+
+/* ===== ЭКРАН МЕССЕНДЖЕРА ===== */
+#chatScreen { 
+    display: none; /* Скрыт по умолчанию */
+    width: 900px; 
+    height: 90vh; 
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+.sidebar { width: 250px; border-right: 1px solid #e0e0e0; background: #f7f7f7; display: flex; flex-direction: column; overflow-y: auto; }
+.sidebar-header { padding: 15px; background: #eee; font-weight: bold; border-bottom: 1px solid #e0e0e0; text-align: center;}
+.chat-area { flex: 1; display: flex; flex-direction: column; }
+.chat-header { padding: 15px; background: #fff; border-bottom: 1px solid #e0e0e0; font-size: 18px; font-weight: bold;}
+#log { flex: 1; overflow-y: auto; padding: 15px; background: #fafafa; }
+.input-area { display: flex; padding: 15px; border-top: 1px solid #e0e0e0; background: #fff; }
+.input-area input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-right: 10px; }
+.input-area button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+
+.user-item { padding: 15px; cursor: pointer; border-bottom: 1px solid #e0e0e0; text-align: left; background: none; border-top: none; border-left: none; border-right: none; width: 100%; font-size: 15px; transition: background 0.2s;}
+.user-item:hover { background: #eaeaea; }
+.user-item.active { background: #007bff; color: white; }
+
+.msg-me { color: green; margin-bottom: 8px; }
+.msg-other { color: blue; margin-bottom: 8px; }
+.msg-error { color: red; margin-bottom: 8px; }
+.msg-warn { color: orange; margin-bottom: 8px; }
+.msg-history { color: gray; margin-bottom: 8px; }
+
+/* Дополнения для шапки сайдбара и кнопки выхода */
+.sidebar-header { 
+    padding: 15px; 
+    background: #eee; 
+    font-weight: bold; 
+    border-bottom: 1px solid #e0e0e0; 
+    display: flex; 
+    justify-content: space-between; /* Разносит имя и кнопку по краям */
+    align-items: center;
+}
+
+.user-info {
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.btn-logout {
+    padding: 5px 10px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    transition: background 0.2s;
+}
+
+.btn-logout:hover {
+    background: #c82333;
+}
