@@ -3,6 +3,8 @@ package models
 type Message struct {
 	Type string `json:"type"`
 
+	ID string `json:"id"`
+
 	From string `json:"from"`
 	To   string `json:"to"`
 
@@ -11,4 +13,6 @@ type Message struct {
 
 	KeySender   string `json:"key_sender"`
 	KeyReceiver string `json:"key_receiver"`
+
+	CreatedAt int64 `json:"created_at"`
 }

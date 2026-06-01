@@ -23,16 +23,16 @@ func Init() {
 func createTables() {
 	query := `
 	CREATE TABLE IF NOT EXISTS messages (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		chat_id TEXT,
-		sender TEXT,
-		receiver TEXT,
-		data TEXT,
-		iv TEXT,
-		key_sender TEXT,
-		key_receiver TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
+    	id TEXT PRIMARY KEY,
+    	chat_id TEXT,
+    	sender TEXT,
+    	receiver TEXT,
+    	data TEXT,
+    	iv TEXT,
+    	key_sender TEXT,
+    	key_receiver TEXT,
+    	created_at INTEGER
+);
 
 	CREATE TABLE IF NOT EXISTS users (
 		id TEXT PRIMARY KEY,

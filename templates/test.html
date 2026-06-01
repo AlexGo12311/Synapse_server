@@ -39,6 +39,12 @@ input, button { padding: 8px; margin: 5px; }
 <button onclick="send()">Send</button>
 
 <script>
+const shownMessages = new Set();
+
+function generateMessageId() {
+    return crypto.randomUUID();
+}
+
 let token = null;
 let userId = null;
 let ws = null;
@@ -204,6 +210,9 @@ async function loadHistory(target) {
 
     for (let m of messages) {
 
+        if (shownMessages.has(m.id)) continue;
+        shownMessages.add(m.id);
+
         const text = await decryptMessage(m);
 
         if (text) {
@@ -266,6 +275,12 @@ function connect() {
 
         const d = JSON.parse(e.data);
 
+        // Получение подтверждения от сервера
+        if (d.type === "message_saved") {
+            // В будущем здесь можно менять статус сообщения на "✓"
+            return;
+        }
+
         if (d.type === "pubkey") {
 
             publicKeys[d.from] = await crypto.subtle.importKey(
@@ -277,9 +292,22 @@ function connect() {
             );
 
             log("🔑 Key ready: " + d.from);
+
+            // Проверяем, есть ли сообщения в очереди для этого пользователя
+            if (pendingMessages[d.from]) {
+                const queue = [...pendingMessages[d.from]];
+                delete pendingMessages[d.from];
+
+                for (const text of queue) {
+                    await sendQueuedMessage(text, d.from);
+                }
+            }
         }
 
         if (d.type === "message") {
+
+            if (shownMessages.has(d.id)) return;
+            shownMessages.add(d.id);
 
             const text = await decryptMessage(d);
 
@@ -292,6 +320,23 @@ function connect() {
     };
 }
 
+// ===== SEND QUEUED =====
+async function sendQueuedMessage(text, target) {
+    const encrypted = await encryptDual(text, publicKeys[target]);
+    const messageId = generateMessageId();
+    
+    shownMessages.add(messageId);
+
+    ws.send(JSON.stringify({
+        id: messageId,
+        type: "message",
+        to: target,
+        ...encrypted
+    }));
+
+    log(`<b>Me:</b> ${text}`, "msg-me");
+}
+
 // ===== SEND =====
 async function send() {
 
@@ -301,15 +346,29 @@ async function send() {
     if (!text || !target) return;
 
     if (!publicKeys[target]) {
-        log("⏳ Waiting for key...");
+        log("⏳ Waiting for key... (Message queued)");
+        
+        if (!pendingMessages[target]) {
+            pendingMessages[target] = [];
+        }
+        
+        pendingMessages[target].push(text);
+
         ws.send(JSON.stringify({ type:"get_pubkey", to: target }));
+        
+        // Очищаем инпут, чтобы пользователь не нажал кнопку дважды
+        messageInput.value = ""; 
         return;
     }
 
     const encrypted = await encryptDual(text, publicKeys[target]);
 
+    const messageId = generateMessageId();
+    shownMessages.add(messageId);
+
     ws.send(JSON.stringify({
-        type:"message",
+        id: messageId,
+        type: "message",
         to: target,
         ...encrypted
     }));

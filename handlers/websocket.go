@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
+
+	"github.com/google/uuid"
 
 	"Synapse_server/models"
 	"Synapse_server/storage"
@@ -68,7 +71,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 			storage.SavePubKey(userID, pubKey)
 			log.Println("Saved pubkey for", userID)
 
-			// 🔥 рассылаем всем
+			// рассылаем всем
 			storage.ClientsMutex.Lock()
 			for id, c := range storage.Clients {
 				if id != userID {
@@ -99,24 +102,58 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		case "message":
 
 			var msg models.Message
+
 			bytes, _ := json.Marshal(raw)
-			json.Unmarshal(bytes, &msg)
+
+			if err := json.Unmarshal(bytes, &msg); err != nil {
+				log.Println("JSON unmarshal error:", err)
+				continue
+			}
 
 			msg.From = userID
 
-			// 💾 сохраняем
+			// Если клиент уже прислал ID — сохраняем его
+			if msg.ID == "" {
+				msg.ID = uuid.New().String()
+			}
+
+			// Если клиент не прислал время
+			if msg.CreatedAt == 0 {
+				msg.CreatedAt = time.Now().Unix()
+			}
+
+			// сохраняем сообщение
 			storage.SaveMessage(msg)
 
-			// 📤 отправляем получателю
+			// подтверждаем отправителю сохранение
+			ws.WriteJSON(map[string]interface{}{
+				"type": "message_saved",
+				"id":   msg.ID,
+			})
+
+			// отправляем получателю если он онлайн
 			storage.ClientsMutex.Lock()
+
 			receiver, ok := storage.Clients[msg.To]
 
 			if ok {
-				log.Println("Forwarding message from", userID, "to", msg.To)
-				receiver.Conn.WriteJSON(msg)
+
+				log.Println(
+					"Forwarding message",
+					msg.ID,
+					"from",
+					userID,
+					"to",
+					msg.To,
+				)
+
+				if err := receiver.Conn.WriteJSON(msg); err != nil {
+					log.Println("Forward error:", err)
+				}
 			}
 
 			storage.ClientsMutex.Unlock()
+
 		}
 	}
 

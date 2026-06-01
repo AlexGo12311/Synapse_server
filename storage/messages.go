@@ -20,10 +20,21 @@ func SaveMessage(msg models.Message) {
 	chatID := GetChatID(msg.From, msg.To)
 
 	_, err := database.DB.Exec(`
-		INSERT INTO messages 
-		(chat_id, sender, receiver, data, iv, key_sender, key_receiver)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO messages
+		(
+			id,
+			chat_id,
+			sender,
+			receiver,
+			data,
+			iv,
+			key_sender,
+			key_receiver,
+			created_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
+		msg.ID,
 		chatID,
 		msg.From,
 		msg.To,
@@ -31,6 +42,7 @@ func SaveMessage(msg models.Message) {
 		msg.IV,
 		msg.KeySender,
 		msg.KeyReceiver,
+		msg.CreatedAt,
 	)
 
 	if err != nil {
@@ -42,7 +54,15 @@ func SaveMessage(msg models.Message) {
 func GetMessages(chatID string) ([]models.Message, error) {
 
 	rows, err := database.DB.Query(`
-		SELECT sender, receiver, data, iv, key_sender, key_receiver
+		SELECT
+			id,
+			sender,
+			receiver,
+			data,
+			iv,
+			key_sender,
+			key_receiver,
+			created_at
 		FROM messages
 		WHERE chat_id = ?
 		ORDER BY created_at ASC
@@ -56,15 +76,18 @@ func GetMessages(chatID string) ([]models.Message, error) {
 	var messages []models.Message
 
 	for rows.Next() {
+
 		var msg models.Message
 
 		err := rows.Scan(
+			&msg.ID,
 			&msg.From,
 			&msg.To,
 			&msg.Data,
 			&msg.IV,
 			&msg.KeySender,
 			&msg.KeyReceiver,
+			&msg.CreatedAt,
 		)
 
 		if err != nil {
@@ -72,10 +95,13 @@ func GetMessages(chatID string) ([]models.Message, error) {
 			continue
 		}
 
-		// важно: чтобы фронт понимал тип
 		msg.Type = "message"
 
 		messages = append(messages, msg)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return messages, nil
