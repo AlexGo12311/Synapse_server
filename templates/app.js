@@ -65,11 +65,19 @@ function logMessage(id, text, type, timeStr = "", status = "sent") {
     logDiv.scrollTop = logDiv.scrollHeight;
 }
 
-// ===== ОБНОВЛЕНИЕ СТАТУСА В UI =====
+// ===== ОБНОВЛЕНИЕ СТАТУСА СООБЩЕНИЙ В UI =====
 function updateMessageStatus(id, newStatus) {
     const statusEl = document.getElementById(`status-${id}`);
     if (statusEl) {
         statusEl.className = `msg-status status-${newStatus}`;
+    }
+}
+
+// ===== ОБНОВЛЕНИЕ ОНЛАЙН СТАТУСА ПОЛЬЗОВАТЕЛЯ =====
+function updatePresence(uid, status) {
+    const presenceIndicator = document.getElementById(`presence-${uid}`);
+    if (presenceIndicator) {
+        presenceIndicator.className = `presence-indicator ${status}`;
     }
 }
 
@@ -134,7 +142,9 @@ function selectUser(targetId, targetName) {
     const activeBtn = document.getElementById("user-btn-" + targetId);
     if (activeBtn) {
         activeBtn.classList.add('active');
-        activeBtn.innerText = "👤 " + targetName;
+        // Сохраняем точку онлайна при смене текста на кнопке
+        const isOnline = document.getElementById(`presence-${targetId}`)?.classList.contains('online');
+        activeBtn.innerHTML = `<span class="presence-indicator ${isOnline ? 'online' : 'offline'}" id="presence-${targetId}"></span> 👤 ${targetName}`;
     }
 
     getLogDiv().innerHTML = "";
@@ -142,8 +152,7 @@ function selectUser(targetId, targetName) {
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "get_pubkey", to: activeTargetId }));
-        // Уведомляем собеседника, что мы открыли чат и прочитали все сообщения
-        ws.send(JSON.stringify({ type: "status_update", to: activeTargetId, status: "read_all" }));
+        // Убрали read_all, так как теперь логика прочтения корректно отрабатывает внутри loadHistory
     }
     loadHistory(activeTargetId);
 }
@@ -162,8 +171,11 @@ async function loadUsersList() {
             const btn = document.createElement("button");
             btn.className = "user-item";
             btn.id = "user-btn-" + u.id;
-            btn.innerText = "👤 " + u.username;
             btn.dataset.username = u.username; 
+            
+            // Вставляем индикатор онлайна сразу при загрузке
+            btn.innerHTML = `<span class="presence-indicator offline" id="presence-${u.id}"></span> 👤 ${u.username}`;
+            
             btn.onclick = () => selectUser(u.id, u.username);
             listContainer.appendChild(btn);
         });
@@ -184,9 +196,13 @@ async function loadHistory(target) {
             const text = await decryptMessage(m, userId);
             if (text) {
                 let timeStr = formatTime(m.timestamp || m.created_at || null);
-                // ИСПРАВЛЕНИЕ: По умолчанию ставим sent, а не read
                 let status = m.status || "sent"; 
                 logMessage(m.id, text, m.from === userId ? "me" : "other", timeStr, status);
+                
+                // ✅ ИСПРАВЛЕНИЕ: Если это входящее сообщение и оно еще не прочитано - отправляем статус "read"
+                if (m.from !== userId && status !== "read" && ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: "status_update", id: m.id, to: m.from, status: "read" }));
+                }
             }
         }
     } catch { logMessage(null, "❌ Error loading history", "error"); }
@@ -201,19 +217,27 @@ function initWebSocket() {
     ws.onmessage = async (e) => {
         const d = JSON.parse(e.data);
 
+        // --- Блок присутствия (Presence) ---
+        if (d.type === "online_list") {
+            if (Array.isArray(d.users)) {
+                d.users.forEach(uid => updatePresence(uid, "online"));
+            }
+            return;
+        }
+
+        if (d.type === "presence") {
+            updatePresence(d.user, d.status);
+            return;
+        }
+
+        // --- Блок статусов сообщений ---
         if (d.type === "message_saved") {
             updateMessageStatus(d.id, "sent");
             return;
         }
 
         if (d.type === "status_update") {
-            // Массовое обновление галочек, если собеседник только что открыл чат
-            if (d.status === "read_all") {
-                document.querySelectorAll('.msg-status:not(.status-read)').forEach(el => {
-                    el.className = 'msg-status status-read';
-                });
-                return;
-            }
+            // ✅ Просто обновляем статус конкретного сообщения по ID
             updateMessageStatus(d.id, d.status);
             return;
         }
@@ -246,8 +270,10 @@ function initWebSocket() {
                 }
             } else {
                 const sideBtn = document.getElementById("user-btn-" + d.from);
-                if (sideBtn && !sideBtn.innerText.includes("✉️")) {
-                    sideBtn.innerText = "👤 " + sideBtn.dataset.username + " ✉️";
+                // Сохраняем статус при добавлении конвертика ✉️
+                if (sideBtn && !sideBtn.innerHTML.includes("✉️")) {
+                    const isOnline = document.getElementById(`presence-${d.from}`)?.classList.contains('online');
+                    sideBtn.innerHTML = `<span class="presence-indicator ${isOnline ? 'online' : 'offline'}" id="presence-${d.from}"></span> 👤 ${sideBtn.dataset.username} ✉️`;
                 }
                 if (d.from !== userId) {
                     ws.send(JSON.stringify({ type: "status_update", id: d.id, to: d.from, status: "delivered" }));

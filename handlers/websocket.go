@@ -38,7 +38,27 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		log.Println("Upgrade error:", err)
 		return
 	}
-	defer ws.Close()
+
+	// Оборачиваем закрытие в defer, чтобы 100% разослать статус offline при любом обрыве связи
+	defer func() {
+		storage.ClientsMutex.Lock()
+		delete(storage.Clients, userID)
+
+		// Рассылаем всем остальным, что пользователь вышел
+		for id, c := range storage.Clients {
+			if id != userID {
+				c.Conn.WriteJSON(map[string]interface{}{
+					"type":   "presence",
+					"user":   userID,
+					"status": "offline",
+				})
+			}
+		}
+		storage.ClientsMutex.Unlock()
+
+		ws.Close()
+		log.Println("User disconnected:", userID)
+	}()
 
 	client := models.Client{
 		ID:   userID,
@@ -47,9 +67,36 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 	storage.ClientsMutex.Lock()
 	storage.Clients[userID] = &client
+
+	// 1. Собираем список тех, кто уже онлайн, чтобы отправить новичку
+	var onlineUsers []string
+	for id := range storage.Clients {
+		if id != userID {
+			onlineUsers = append(onlineUsers, id)
+		}
+	}
 	storage.ClientsMutex.Unlock()
 
 	log.Println("User connected:", userID)
+
+	// 2. Отправляем подключившемуся юзеру список онлайна
+	ws.WriteJSON(map[string]interface{}{
+		"type":  "online_list",
+		"users": onlineUsers,
+	})
+
+	// 3. Сообщаем всем остальным, что этот юзер зашел
+	storage.ClientsMutex.Lock()
+	for id, c := range storage.Clients {
+		if id != userID {
+			c.Conn.WriteJSON(map[string]interface{}{
+				"type":   "presence",
+				"user":   userID,
+				"status": "online",
+			})
+		}
+	}
+	storage.ClientsMutex.Unlock()
 
 	for {
 		var raw map[string]interface{}
@@ -98,7 +145,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 
-			// ================= MESSAGE =================
+		// ================= MESSAGE =================
 		case "message":
 
 			var msg models.Message
@@ -159,14 +206,15 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 			// Если !ok (оффлайн), мы ничего не делаем. Сообщение останется в БД со статусом 'sent'.
 			storage.ClientsMutex.Unlock()
 
-		// ================= СТАТУСЫ ДОСТАВКИ (НОВОЕ) =================
+		// ================= СТАТУСЫ ДОСТАВКИ =================
 		case "status_update":
 			target, _ := raw["to"].(string)
 			msgID, okID := raw["id"].(string)
 			status, okStatus := raw["status"].(string)
 
 			// 1. Сохраняем новый статус в базу данных
-			if okID && okStatus && status != "read_all" {
+			// (Убрали условие status != "read_all", теперь любой статус корректно пишется в БД)
+			if okID && okStatus {
 				err := storage.UpdateMessageStatus(msgID, status)
 				if err != nil {
 					log.Printf("Failed to update status for msg %s: %v", msgID, err)
@@ -191,10 +239,4 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 		}
 	}
-
-	storage.ClientsMutex.Lock()
-	delete(storage.Clients, userID)
-	storage.ClientsMutex.Unlock()
-
-	log.Println("User disconnected:", userID)
 }

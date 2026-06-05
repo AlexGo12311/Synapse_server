@@ -261,3 +261,22 @@ body {
     letter-spacing: -3px;
     padding-right: 3px;
 }
+
+.presence-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    background-color: #999; /* Серый по умолчанию (оффлайн) */
+    transition: background-color 0.3s ease;
+}
+
+.presence-indicator.online {
+    background-color: #4CAF50; /* Зеленый (онлайн) */
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5); /* Небольшое свечение */
+}
+
+.presence-indicator.offline {
+    background-color: #999;
+}
