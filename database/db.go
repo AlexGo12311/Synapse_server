@@ -22,25 +22,26 @@ func Init() {
 
 func createTables() {
 	query := `
-	CREATE TABLE IF NOT EXISTS messages (
-    	id TEXT PRIMARY KEY,
-    	chat_id TEXT,
-    	sender TEXT,
-    	receiver TEXT,
-    	data TEXT,
-    	iv TEXT,
-    	key_sender TEXT,
-    	key_receiver TEXT,
-    	created_at INTEGER
-);
+    CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        chat_id TEXT,
+        sender TEXT,
+        receiver TEXT,
+        data TEXT,
+        iv TEXT,
+        key_sender TEXT,
+        key_receiver TEXT,
+        created_at INTEGER,
+        status TEXT DEFAULT 'sent' -- НОВАЯ КОЛОНКА
+    );
 
-	CREATE TABLE IF NOT EXISTS users (
-		id TEXT PRIMARY KEY,
-		username TEXT UNIQUE,
-		password TEXT,
-		pubkey TEXT
-	);
-	`
+    CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE,
+        password TEXT,
+        pubkey TEXT
+    );
+    `
 
 	_, err := DB.Exec(query)
 	if err != nil {

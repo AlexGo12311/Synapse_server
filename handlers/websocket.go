@@ -98,7 +98,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 
-		// ================= MESSAGE =================
+			// ================= MESSAGE =================
 		case "message":
 
 			var msg models.Message
@@ -122,36 +122,71 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 				msg.CreatedAt = time.Now().Unix()
 			}
 
-			// сохраняем сообщение
+			// 1. Сохраняем сообщение в БД (по умолчанию оно получает статус 'sent')
 			storage.SaveMessage(msg)
 
-			// подтверждаем отправителю сохранение
+			// 2. Подтверждаем отправителю, что сервер всё записал (ЭТО ТОЛЬКО 1 ГАЛОЧКА!)
 			ws.WriteJSON(map[string]interface{}{
 				"type": "message_saved",
 				"id":   msg.ID,
 			})
 
-			// отправляем получателю если он онлайн
+			// 3. Проверяем, в сети ли получатель
 			storage.ClientsMutex.Lock()
-
 			receiver, ok := storage.Clients[msg.To]
 
 			if ok {
+				log.Println("Forwarding message", msg.ID, "from", userID, "to", msg.To)
 
-				log.Println(
-					"Forwarding message",
-					msg.ID,
-					"from",
-					userID,
-					"to",
-					msg.To,
-				)
+				// Пытаемся отправить сообщение
+				if err := receiver.Conn.WriteJSON(msg); err == nil {
+					// УСПЕХ! Получатель онлайн и сообщение ушло в его сокет.
 
-				if err := receiver.Conn.WriteJSON(msg); err != nil {
+					// Обновляем статус в БД на "доставлено"
+					storage.UpdateMessageStatus(msg.ID, "delivered")
+
+					// Сразу сообщаем отправителю, что сообщение доставлено (2 серые галочки)
+					ws.WriteJSON(map[string]interface{}{
+						"type":   "status_update",
+						"id":     msg.ID,
+						"status": "delivered",
+						"from":   msg.To, // от кого пришел статус
+					})
+				} else {
 					log.Println("Forward error:", err)
 				}
 			}
+			// Если !ok (оффлайн), мы ничего не делаем. Сообщение останется в БД со статусом 'sent'.
+			storage.ClientsMutex.Unlock()
 
+		// ================= СТАТУСЫ ДОСТАВКИ (НОВОЕ) =================
+		case "status_update":
+			target, _ := raw["to"].(string)
+			msgID, okID := raw["id"].(string)
+			status, okStatus := raw["status"].(string)
+
+			// 1. Сохраняем новый статус в базу данных
+			if okID && okStatus && status != "read_all" {
+				err := storage.UpdateMessageStatus(msgID, status)
+				if err != nil {
+					log.Printf("Failed to update status for msg %s: %v", msgID, err)
+				}
+			}
+
+			// 2. Пересылаем статус получателю (если он онлайн), чтобы у него покрасились галочки
+			storage.ClientsMutex.Lock()
+			receiver, isOnline := storage.Clients[target]
+
+			if isOnline {
+				log.Println("Forwarding status", status, "from", userID, "to", target)
+
+				// Добавляем поле from, чтобы фронтенд знал, в каком чате менять статус
+				raw["from"] = userID
+
+				if err := receiver.Conn.WriteJSON(raw); err != nil {
+					log.Println("Status forward error:", err)
+				}
+			}
 			storage.ClientsMutex.Unlock()
 
 		}

@@ -215,3 +215,49 @@ body {
     text-align: center;
 }
 .system-row.error .system-box { background: #ffebee; color: #c62828; }
+
+/* ===== СТАТУСЫ ДОСТАВКИ И ВРЕМЯ ===== */
+.msg-meta {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 2px;
+    align-self: flex-end;
+}
+
+.msg-time {
+    font-size: 10.5px;
+    color: #667781;
+    user-select: none;
+}
+
+.msg-status {
+    font-size: 13px;
+    line-height: 1;
+    user-select: none;
+    display: inline-block;
+    font-weight: bold;
+}
+
+/* 1 серая галочка (Отправлено) */
+.status-sent::after { 
+    content: '✓'; 
+    color: #8b9eb7; 
+}
+
+/* 2 серые галочки (Доставлено) */
+.status-delivered::after { 
+    content: '✓✓'; 
+    color: #8b9eb7; 
+    letter-spacing: -3px; 
+    padding-right: 3px;
+}
+
+/* 2 синие галочки (Прочитано) */
+.status-read::after { 
+    content: '✓✓'; 
+    color: #34b7f1; 
+    letter-spacing: -3px;
+    padding-right: 3px;
+}

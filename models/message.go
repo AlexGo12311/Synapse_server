@@ -14,5 +14,6 @@ type Message struct {
 	KeySender   string `json:"key_sender"`
 	KeyReceiver string `json:"key_receiver"`
 
-	CreatedAt int64 `json:"created_at"`
+	CreatedAt int64  `json:"created_at"`
+	Status    string `json:"status"`
 }

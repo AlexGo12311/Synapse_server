@@ -10,19 +10,16 @@ const pendingMessages = {};
 const getLogDiv = () => document.getElementById("log");
 const getAuthErrorDiv = () => document.getElementById("authError");
 
-// ===== ФОРМАТИРОВАНИЕ ВРЕМЕНИ (ЧЧ:ММ) =====
 function formatTime(timeInput) {
     let d = timeInput ? new Date(timeInput) : new Date();
-    // Проверка на корректность даты (если сервер прислал невалидный формат)
     if (isNaN(d.getTime())) d = new Date(); 
-    
     let hours = String(d.getHours()).padStart(2, '0');
     let minutes = String(d.getMinutes()).padStart(2, '0');
     return `${hours}:${minutes}`;
 }
 
-// ===== УМНЫЙ ЛОГЕР ДЛЯ БАБЛОВ И ВРЕМЕНИ =====
-function logMessage(text, type, timeStr = "") {
+// ===== УМНЫЙ ЛОГЕР С ГАЛОЧКАМИ =====
+function logMessage(id, text, type, timeStr = "", status = "sent") {
     const logDiv = getLogDiv();
     if (!logDiv) return;
 
@@ -34,31 +31,46 @@ function logMessage(text, type, timeStr = "") {
         const bubble = document.createElement("div");
         bubble.className = "bubble";
         
-        // Блок для текста сообщения
         const txtSpan = document.createElement("span");
         txtSpan.className = "bubble-text";
         txtSpan.innerText = text;
         
-        // Блок для времени
+        const metaDiv = document.createElement("div");
+        metaDiv.className = "msg-meta";
+
         const timeSpan = document.createElement("span");
         timeSpan.className = "msg-time";
         timeSpan.innerText = timeStr || formatTime();
+        metaDiv.appendChild(timeSpan);
+
+        if (type === "me") {
+            const statusSpan = document.createElement("span");
+            statusSpan.className = `msg-status status-${status}`;
+            statusSpan.id = `status-${id}`; 
+            metaDiv.appendChild(statusSpan);
+        }
         
         bubble.appendChild(txtSpan);
-        bubble.appendChild(timeSpan);
+        bubble.appendChild(metaDiv);
         row.appendChild(bubble);
     } else {
         row.className = `system-row ${type === 'error' ? 'error' : ''}`;
-        
         const sysBox = document.createElement("div");
         sysBox.className = "system-box";
         sysBox.innerText = text;
-        
         row.appendChild(sysBox);
     }
 
     logDiv.appendChild(row);
     logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+// ===== ОБНОВЛЕНИЕ СТАТУСА В UI =====
+function updateMessageStatus(id, newStatus) {
+    const statusEl = document.getElementById(`status-${id}`);
+    if (statusEl) {
+        statusEl.className = `msg-status status-${newStatus}`;
+    }
 }
 
 // ===== РЕГИСТРАЦИЯ =====
@@ -67,29 +79,16 @@ async function register() {
     const p = document.getElementById("authPassword").value;
     const authErrorDiv = getAuthErrorDiv();
     authErrorDiv.innerText = "";
-
-    if (!u || !p) {
-        authErrorDiv.innerText = "Fill all fields";
-        return;
-    }
+    if (!u || !p) { authErrorDiv.innerText = "Fill all fields"; return; }
 
     try {
         const res = await fetch("http://localhost:8080/register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username: u, password: p })
         });
-
-        if (!res.ok) {
-            const text = await res.text();
-            authErrorDiv.innerText = text;
-            return;
-        }
-
+        if (!res.ok) { authErrorDiv.innerText = await res.text(); return; }
         await login();
-    } catch (err) {
-        authErrorDiv.innerText = "Server connection error";
-    }
+    } catch (err) { authErrorDiv.innerText = "Server connection error"; }
 }
 
 // ===== ВХОД =====
@@ -98,50 +97,36 @@ async function login() {
     const p = document.getElementById("authPassword").value;
     const authErrorDiv = getAuthErrorDiv();
     authErrorDiv.innerText = "";
-
-    if (!u || !p) {
-        authErrorDiv.innerText = "Fill all fields";
-        return;
-    }
+    if (!u || !p) { authErrorDiv.innerText = "Fill all fields"; return; }
 
     try {
         const res = await fetch("http://localhost:8080/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username: u, password: p })
         });
-
-        if (!res.ok) {
-            const text = await res.text();
-            authErrorDiv.innerText = text;
-            return;
-        }
+        if (!res.ok) { authErrorDiv.innerText = await res.text(); return; }
 
         const data = await res.json();
-        token = data.token;
-        userId = data.id;
+        token = data.token; userId = data.id;
         
         document.getElementById("authScreen").style.display = "none";
         document.getElementById("chatScreen").style.display = "flex";
         document.getElementById("myUsernameDisplay").innerText = u;
 
         const keyStatus = await initRSA(userId);
-        logMessage(`🔑 Keys ${keyStatus}`, "system");
+        logMessage(null, `🔑 Keys ${keyStatus}`, "system");
 
         await loadUsersList();
         initWebSocket();
-    } catch (err) {
-        authErrorDiv.innerText = "Server connection error";
-    }
+    } catch (err) { authErrorDiv.innerText = "Server connection error"; }
 }
 
-// ===== ВЫБОР ПОЛЬЗОВАТЕЛЯ ИЗ СПИСКА =====
+// ===== ВЫБОР ПОЛЬЗОВАТЕЛЯ =====
 function selectUser(targetId, targetName) {
     if (targetId === activeTargetId) return;
     
     activeTargetId = targetId;
     document.getElementById("activeChatTarget").innerText = targetName;
-    
     document.getElementById("messageInput").disabled = false;
     document.getElementById("sendBtn").disabled = false;
     
@@ -157,25 +142,23 @@ function selectUser(targetId, targetName) {
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "get_pubkey", to: activeTargetId }));
+        // Уведомляем собеседника, что мы открыли чат и прочитали все сообщения
+        ws.send(JSON.stringify({ type: "status_update", to: activeTargetId, status: "read_all" }));
     }
     loadHistory(activeTargetId);
 }
 
-// ===== ЗАГРУЗКА СПИСКА ПОЛЬЗОВАТЕЛЕЙ =====
+// ===== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ =====
 async function loadUsersList() {
     try {
-        const res = await fetch("http://localhost:8080/users", {
-            headers: { "Authorization": "Bearer " + token }
-        });
+        const res = await fetch("http://localhost:8080/users", { headers: { "Authorization": "Bearer " + token } });
         const users = await res.json();
         const listContainer = document.getElementById("usersList");
         listContainer.innerHTML = "";
-
         if (!users || users.length === 0) return;
 
         users.forEach(u => {
             if (u.id === userId) return; 
-            
             const btn = document.createElement("button");
             btn.className = "user-item";
             btn.id = "user-btn-" + u.id;
@@ -184,19 +167,14 @@ async function loadUsersList() {
             btn.onclick = () => selectUser(u.id, u.username);
             listContainer.appendChild(btn);
         });
-    } catch (err) {
-        logMessage("❌ Failed to load users list", "error");
-    }
+    } catch (err) { logMessage(null, "❌ Failed to load users list", "error"); }
 }
 
 // ===== HISTORY =====
 async function loadHistory(target) {
     try {
-        const res = await fetch(`http://localhost:8080/history?to=${target}`, {
-            headers: { "Authorization": "Bearer " + token }
-        });
+        const res = await fetch(`http://localhost:8080/history?to=${target}`, { headers: { "Authorization": "Bearer " + token } });
         const messages = await res.json();
-
         if (!messages) return;
 
         for (let m of messages) {
@@ -205,47 +183,49 @@ async function loadHistory(target) {
 
             const text = await decryptMessage(m, userId);
             if (text) {
-                // Если бэкенд присылает поле времени (например, timestamp или created_at), берем его
                 let timeStr = formatTime(m.timestamp || m.created_at || null);
-                logMessage(text, m.from === userId ? "me" : "other", timeStr);
+                // ИСПРАВЛЕНИЕ: По умолчанию ставим sent, а не read
+                let status = m.status || "sent"; 
+                logMessage(m.id, text, m.from === userId ? "me" : "other", timeStr, status);
             }
         }
-    } catch {
-        logMessage("❌ Error loading history", "error");
-    }
+    } catch { logMessage(null, "❌ Error loading history", "error"); }
 }
 
-// ===== ИНИЦИАЛИЗАЦИЯ WEBSOCKET =====
+// ===== WEBSOCKET =====
 function initWebSocket() {
     ws = new WebSocket(`ws://localhost:8080/ws?token=${token}`);
 
-    ws.onopen = () => {
-        ws.send(JSON.stringify({
-            type: "set_pubkey",
-            pubKey: publicKeyBase64
-        }));
-    };
+    ws.onopen = () => { ws.send(JSON.stringify({ type: "set_pubkey", pubKey: publicKeyBase64 })); };
 
     ws.onmessage = async (e) => {
         const d = JSON.parse(e.data);
 
-        if (d.type === "message_saved") return;
+        if (d.type === "message_saved") {
+            updateMessageStatus(d.id, "sent");
+            return;
+        }
+
+        if (d.type === "status_update") {
+            // Массовое обновление галочек, если собеседник только что открыл чат
+            if (d.status === "read_all") {
+                document.querySelectorAll('.msg-status:not(.status-read)').forEach(el => {
+                    el.className = 'msg-status status-read';
+                });
+                return;
+            }
+            updateMessageStatus(d.id, d.status);
+            return;
+        }
 
         if (d.type === "pubkey") {
             publicKeys[d.from] = await crypto.subtle.importKey(
-                "spki",
-                fromB64(d.pubKey),
-                { name: "RSA-OAEP", hash: "SHA-256" },
-                true,
-                ["encrypt"]
+                "spki", fromB64(d.pubKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]
             );
-
             if (pendingMessages[d.from]) {
                 const queue = [...pendingMessages[d.from]];
                 delete pendingMessages[d.from];
-                for (const text of queue) {
-                    await sendQueuedMessage(text, d.from);
-                }
+                for (const text of queue) await sendQueuedMessage(text, d.from);
             }
         }
 
@@ -258,12 +238,19 @@ function initWebSocket() {
             if (d.from === activeTargetId || (d.from === userId && d.to === activeTargetId)) {
                 if (text) {
                     let timeStr = formatTime(d.timestamp || d.created_at || null);
-                    logMessage(text, d.from === userId ? "me" : "other", timeStr);
+                    logMessage(d.id, text, d.from === userId ? "me" : "other", timeStr);
+                    
+                    if (d.from !== userId) {
+                        ws.send(JSON.stringify({ type: "status_update", id: d.id, to: d.from, status: "read" }));
+                    }
                 }
             } else {
                 const sideBtn = document.getElementById("user-btn-" + d.from);
                 if (sideBtn && !sideBtn.innerText.includes("✉️")) {
                     sideBtn.innerText = "👤 " + sideBtn.dataset.username + " ✉️";
+                }
+                if (d.from !== userId) {
+                    ws.send(JSON.stringify({ type: "status_update", id: d.id, to: d.from, status: "delivered" }));
                 }
             }
         }
@@ -276,14 +263,8 @@ async function sendQueuedMessage(text, target) {
     const messageId = generateMessageId();
     shownMessages.add(messageId);
 
-    ws.send(JSON.stringify({
-        id: messageId,
-        type: "message",
-        to: target,
-        ...encrypted
-    }));
-    
-    if(target === activeTargetId) logMessage(text, "me", formatTime());
+    ws.send(JSON.stringify({ id: messageId, type: "message", to: target, ...encrypted }));
+    logMessage(messageId, text, "me", formatTime(), "sent");
 }
 
 // ===== SEND =====
@@ -306,28 +287,15 @@ async function send() {
     const messageId = generateMessageId();
     shownMessages.add(messageId);
 
-    ws.send(JSON.stringify({
-        id: messageId,
-        type: "message",
-        to: target,
-        ...encrypted
-    }));
-
-    logMessage(text, "me", formatTime());
+    ws.send(JSON.stringify({ id: messageId, type: "message", to: target, ...encrypted }));
+    logMessage(messageId, text, "me", formatTime(), "sent"); 
     messageInput.value = "";
 }
 
 // ===== ВЫХОД =====
 function logout() {
-    if (ws) {
-        ws.close();
-        ws = null;
-    }
-
-    token = null;
-    userId = null;
-    activeTargetId = null;
-    
+    if (ws) { ws.close(); ws = null; }
+    token = null; userId = null; activeTargetId = null;
     for (let key in publicKeys) delete publicKeys[key];
     shownMessages.clear();
 
@@ -336,8 +304,7 @@ function logout() {
     document.getElementById("activeChatTarget").innerText = "Select a user";
     
     const messageInput = document.getElementById("messageInput");
-    messageInput.value = "";
-    messageInput.disabled = true;
+    messageInput.value = ""; messageInput.disabled = true;
     document.getElementById("sendBtn").disabled = true;
     document.getElementById("authPassword").value = ""; 
     getAuthErrorDiv().innerText = "";
