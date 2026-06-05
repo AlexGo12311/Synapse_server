@@ -1,3 +1,7 @@
+document.addEventListener('submit', function(e) {
+    e.preventDefault();
+});
+
 let token = null;
 let userId = null;
 let ws = null;
@@ -75,7 +79,7 @@ function updateMessageStatus(id, newStatus) {
 
 // ===== ОБНОВЛЕНИЕ ОНЛАЙН СТАТУСА ПОЛЬЗОВАТЕЛЯ =====
 function updatePresence(uid, status) {
-    const presenceIndicator = document.getElementById(`presence-${uid}`);
+    const presenceIndicator = document.getElementById(`presence-${String(uid)}`);
     if (presenceIndicator) {
         presenceIndicator.className = `presence-indicator ${status}`;
     }
@@ -115,7 +119,12 @@ async function login() {
         if (!res.ok) { authErrorDiv.innerText = await res.text(); return; }
 
         const data = await res.json();
-        token = data.token; userId = data.id;
+        token = data.token; 
+        userId = String(data.id);
+        
+        localStorage.setItem("token", token);
+        localStorage.setItem("userId", userId);
+        localStorage.setItem("username", u);
         
         document.getElementById("authScreen").style.display = "none";
         document.getElementById("chatScreen").style.display = "flex";
@@ -131,20 +140,20 @@ async function login() {
 
 // ===== ВЫБОР ПОЛЬЗОВАТЕЛЯ =====
 function selectUser(targetId, targetName) {
-    if (targetId === activeTargetId) return;
+    activeTargetId = String(targetId); 
     
-    activeTargetId = targetId;
+    if (document.getElementById("activeChatTarget").innerText === targetName && getLogDiv().children.length > 0) return;
+    
     document.getElementById("activeChatTarget").innerText = targetName;
     document.getElementById("messageInput").disabled = false;
     document.getElementById("sendBtn").disabled = false;
     
     document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
-    const activeBtn = document.getElementById("user-btn-" + targetId);
+    const activeBtn = document.getElementById("user-btn-" + activeTargetId);
     if (activeBtn) {
         activeBtn.classList.add('active');
-        // Сохраняем точку онлайна при смене текста на кнопке
-        const isOnline = document.getElementById(`presence-${targetId}`)?.classList.contains('online');
-        activeBtn.innerHTML = `<span class="presence-indicator ${isOnline ? 'online' : 'offline'}" id="presence-${targetId}"></span> 👤 ${targetName}`;
+        const isOnline = document.getElementById(`presence-${activeTargetId}`)?.classList.contains('online');
+        activeBtn.innerHTML = `<span class="presence-indicator ${isOnline ? 'online' : 'offline'}" id="presence-${activeTargetId}"></span> 👤 ${targetName}`;
     }
 
     getLogDiv().innerHTML = "";
@@ -152,7 +161,6 @@ function selectUser(targetId, targetName) {
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "get_pubkey", to: activeTargetId }));
-        // Убрали read_all, так как теперь логика прочтения корректно отрабатывает внутри loadHistory
     }
     loadHistory(activeTargetId);
 }
@@ -167,16 +175,17 @@ async function loadUsersList() {
         if (!users || users.length === 0) return;
 
         users.forEach(u => {
-            if (u.id === userId) return; 
+            const uIdStr = String(u.id); 
+            if (uIdStr === userId) return; 
+            
             const btn = document.createElement("button");
             btn.className = "user-item";
-            btn.id = "user-btn-" + u.id;
+            btn.id = "user-btn-" + uIdStr;
             btn.dataset.username = u.username; 
             
-            // Вставляем индикатор онлайна сразу при загрузке
-            btn.innerHTML = `<span class="presence-indicator offline" id="presence-${u.id}"></span> 👤 ${u.username}`;
+            btn.innerHTML = `<span class="presence-indicator offline" id="presence-${uIdStr}"></span> 👤 ${u.username}`;
             
-            btn.onclick = () => selectUser(u.id, u.username);
+            btn.onclick = () => selectUser(uIdStr, u.username);
             listContainer.appendChild(btn);
         });
     } catch (err) { logMessage(null, "❌ Failed to load users list", "error"); }
@@ -190,18 +199,21 @@ async function loadHistory(target) {
         if (!messages) return;
 
         for (let m of messages) {
-            if (shownMessages.has(m.id)) continue;
-            shownMessages.add(m.id);
+            const msgIdStr = String(m.id);
+            if (shownMessages.has(msgIdStr)) continue;
+            shownMessages.add(msgIdStr);
 
             const text = await decryptMessage(m, userId);
             if (text) {
                 let timeStr = formatTime(m.timestamp || m.created_at || null);
                 let status = m.status || "sent"; 
-                logMessage(m.id, text, m.from === userId ? "me" : "other", timeStr, status);
+                const fromIdStr = String(m.from);
+                const isMe = fromIdStr === userId;
+
+                logMessage(msgIdStr, text, isMe ? "me" : "other", timeStr, status);
                 
-                // ✅ ИСПРАВЛЕНИЕ: Если это входящее сообщение и оно еще не прочитано - отправляем статус "read"
-                if (m.from !== userId && status !== "read" && ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: "status_update", id: m.id, to: m.from, status: "read" }));
+                if (!isMe && status !== "read" && ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: "status_update", id: msgIdStr, to: fromIdStr, status: "read" }));
                 }
             }
         }
@@ -220,25 +232,24 @@ function initWebSocket() {
         // --- Блок присутствия (Presence) ---
         if (d.type === "online_list") {
             if (Array.isArray(d.users)) {
-                d.users.forEach(uid => updatePresence(uid, "online"));
+                d.users.forEach(uid => updatePresence(String(uid), "online"));
             }
             return;
         }
 
         if (d.type === "presence") {
-            updatePresence(d.user, d.status);
+            updatePresence(String(d.user), d.status);
             return;
         }
 
         // --- Блок статусов сообщений ---
         if (d.type === "message_saved") {
-            updateMessageStatus(d.id, "sent");
+            updateMessageStatus(String(d.id), "sent");
             return;
         }
 
         if (d.type === "status_update") {
-            // ✅ Просто обновляем статус конкретного сообщения по ID
-            updateMessageStatus(d.id, d.status);
+            updateMessageStatus(String(d.id), d.status);
             return;
         }
 
@@ -254,29 +265,31 @@ function initWebSocket() {
         }
 
         if (d.type === "message") {
-            if (shownMessages.has(d.id)) return;
-            shownMessages.add(d.id);
+            const msgIdStr = String(d.id);
+            if (shownMessages.has(msgIdStr)) return;
+            shownMessages.add(msgIdStr);
 
             const text = await decryptMessage(d, userId);
+            const fromIdStr = String(d.from);
+            const isMe = fromIdStr === userId;
             
-            if (d.from === activeTargetId || (d.from === userId && d.to === activeTargetId)) {
+            if (fromIdStr === activeTargetId || (isMe && String(d.to) === activeTargetId)) {
                 if (text) {
                     let timeStr = formatTime(d.timestamp || d.created_at || null);
-                    logMessage(d.id, text, d.from === userId ? "me" : "other", timeStr);
+                    logMessage(msgIdStr, text, isMe ? "me" : "other", timeStr);
                     
-                    if (d.from !== userId) {
-                        ws.send(JSON.stringify({ type: "status_update", id: d.id, to: d.from, status: "read" }));
+                    if (!isMe) {
+                        ws.send(JSON.stringify({ type: "status_update", id: msgIdStr, to: fromIdStr, status: "read" }));
                     }
                 }
             } else {
-                const sideBtn = document.getElementById("user-btn-" + d.from);
-                // Сохраняем статус при добавлении конвертика ✉️
+                const sideBtn = document.getElementById("user-btn-" + fromIdStr);
                 if (sideBtn && !sideBtn.innerHTML.includes("✉️")) {
-                    const isOnline = document.getElementById(`presence-${d.from}`)?.classList.contains('online');
-                    sideBtn.innerHTML = `<span class="presence-indicator ${isOnline ? 'online' : 'offline'}" id="presence-${d.from}"></span> 👤 ${sideBtn.dataset.username} ✉️`;
+                    const isOnline = document.getElementById(`presence-${fromIdStr}`)?.classList.contains('online');
+                    sideBtn.innerHTML = `<span class="presence-indicator ${isOnline ? 'online' : 'offline'}" id="presence-${fromIdStr}"></span> 👤 ${sideBtn.dataset.username} ✉️`;
                 }
-                if (d.from !== userId) {
-                    ws.send(JSON.stringify({ type: "status_update", id: d.id, to: d.from, status: "delivered" }));
+                if (!isMe) {
+                    ws.send(JSON.stringify({ type: "status_update", id: msgIdStr, to: fromIdStr, status: "delivered" }));
                 }
             }
         }
@@ -289,7 +302,7 @@ async function sendQueuedMessage(text, target) {
     const messageId = generateMessageId();
     shownMessages.add(messageId);
 
-    ws.send(JSON.stringify({ id: messageId, type: "message", to: target, ...encrypted }));
+    ws.send(JSON.stringify({ id: messageId, type: "message", to: String(target), ...encrypted }));
     logMessage(messageId, text, "me", formatTime(), "sent");
 }
 
@@ -304,7 +317,7 @@ async function send() {
     if (!publicKeys[target]) {
         if (!pendingMessages[target]) pendingMessages[target] = [];
         pendingMessages[target].push(text);
-        ws.send(JSON.stringify({ type: "get_pubkey", to: target }));
+        ws.send(JSON.stringify({ type: "get_pubkey", to: String(target) }));
         messageInput.value = "";
         return;
     }
@@ -313,7 +326,7 @@ async function send() {
     const messageId = generateMessageId();
     shownMessages.add(messageId);
 
-    ws.send(JSON.stringify({ id: messageId, type: "message", to: target, ...encrypted }));
+    ws.send(JSON.stringify({ id: messageId, type: "message", to: String(target), ...encrypted }));
     logMessage(messageId, text, "me", formatTime(), "sent"); 
     messageInput.value = "";
 }
@@ -324,6 +337,10 @@ function logout() {
     token = null; userId = null; activeTargetId = null;
     for (let key in publicKeys) delete publicKeys[key];
     shownMessages.clear();
+
+    localStorage.removeItem("token");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("username");
 
     getLogDiv().innerHTML = "";
     document.getElementById("usersList").innerHTML = "";
@@ -338,3 +355,36 @@ function logout() {
     document.getElementById("chatScreen").style.display = "none";
     document.getElementById("authScreen").style.display = "block";
 }
+
+// ===== АВТОЛОГИН ПРИ ОТКРЫТИИ / ОБНОВЛЕНИИ СТРАНИЦЫ =====
+window.addEventListener('DOMContentLoaded', async () => {
+    const savedToken = localStorage.getItem("token");
+    const savedUserId = localStorage.getItem("userId");
+    const savedUsername = localStorage.getItem("username");
+
+    if (savedToken && savedUserId) {
+        token = savedToken;
+        userId = String(savedUserId);
+        
+        try {
+            const res = await fetch("http://localhost:8080/users", { headers: { "Authorization": "Bearer " + token } });
+            if (res.ok) {
+                document.getElementById("authScreen").style.display = "none";
+                document.getElementById("chatScreen").style.display = "flex";
+                document.getElementById("myUsernameDisplay").innerText = savedUsername || "User";
+
+                const keyStatus = await initRSA(userId);
+                logMessage(null, `🔑 Keys ${keyStatus}`, "system");
+
+                await loadUsersList();
+                initWebSocket();
+            } else {
+                localStorage.removeItem("token");
+                localStorage.removeItem("userId");
+                localStorage.removeItem("username");
+            }
+        } catch (err) {
+            console.log("Server unavailable on load");
+        }
+    }
+});
