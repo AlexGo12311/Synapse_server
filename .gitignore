@@ -27,3 +27,6 @@ DerivedData/
 .DS_Store
 *.xcuserstate
 Podfile.lock
+
+# Ignore sql db file
+chat.db
