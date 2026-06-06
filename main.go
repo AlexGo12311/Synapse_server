@@ -4,9 +4,10 @@ import (
 	"log"
 	"net/http"
 
+	"Synapse_server/auth"
 	"Synapse_server/database"
 	"Synapse_server/handlers"
-	"Synapse_server/middlewares"
+	"Synapse_server/storage"
 )
 
 // CORS middleware
@@ -26,16 +27,21 @@ func enableCORS(h http.Handler) http.Handler {
 
 func main() {
 
-	// ИНИЦИАЛИЗАЦИЯ БД
-	database.Init()
+	// Инициализируем слои через New()
+	db := database.New()
+	store := storage.New(db)
+	hub := storage.NewClientsHub()
+
+	// Собираем сервер с внедренными зависимостями
+	server := handlers.NewServer(store, hub)
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/register", handlers.Register)
-	mux.HandleFunc("/login", handlers.Login)
-	mux.HandleFunc("/ws", handlers.HandleConnections)
-	mux.Handle("/history", middlewares.AuthMiddleware(http.HandlerFunc(handlers.GetHistory)))
-	mux.Handle("/users", middlewares.AuthMiddleware(http.HandlerFunc(handlers.GetUsers)))
+	mux.HandleFunc("/register", server.Register)
+	mux.HandleFunc("/login", server.Login)
+	mux.HandleFunc("/ws", server.HandleConnections)
+	mux.Handle("/history", auth.AuthMiddleware(http.HandlerFunc(server.GetHistory)))
+	mux.Handle("/users", auth.AuthMiddleware(http.HandlerFunc(server.GetUsers)))
 
 	log.Println("Server running on :8080")
 	http.ListenAndServe(":8080", enableCORS(mux))

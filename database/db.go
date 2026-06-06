@@ -7,20 +7,23 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var DB *sql.DB
+type Database struct {
+	DB *sql.DB
+}
 
-func Init() {
-	var err error
-
-	DB, err = sql.Open("sqlite", "chat.db")
+// New инициализирует подключение к БД и создает таблицы
+func New() *Database {
+	db, err := sql.Open("sqlite", "chat.db")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	createTables()
+	d := &Database{DB: db}
+	d.createTables()
+	return d
 }
 
-func createTables() {
+func (d *Database) createTables() {
 	query := `
     CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
@@ -43,7 +46,7 @@ func createTables() {
     );
     `
 
-	_, err := DB.Exec(query)
+	_, err := d.DB.Exec(query)
 	if err != nil {
 		log.Fatal(err)
 	}

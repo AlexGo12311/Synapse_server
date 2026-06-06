@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"Synapse_server/database"
 	"Synapse_server/models"
 	"database/sql"
 	"log"
@@ -9,11 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// CreateUser регистрирует нового пользователя в базе данных.
-func CreateUser(username, password string) (*models.User, error) {
+func (s *Storage) CreateUser(username, password string) (*models.User, error) {
 	id := uuid.New().String()
 
-	_, err := database.DB.Exec(`
+	_, err := s.db.DB.Exec(`
 		INSERT INTO users (id, username, password)
 		VALUES (?, ?, ?)
 	`, id, username, password)
@@ -31,15 +29,13 @@ func CreateUser(username, password string) (*models.User, error) {
 	}, nil
 }
 
-// GetUserByUsername ищет пользователя для авторизации.
-// Использует sql.NullString для безопасного чтения поля pubkey, которое может быть NULL.
-func GetUserByUsername(username string) (*models.User, error) {
+func (s *Storage) GetUserByUsername(username string) (*models.User, error) {
 	log.Println("LOGIN SEARCH:", username)
 
 	var user models.User
 	var rawPubKey sql.NullString
 
-	err := database.DB.QueryRow(`
+	err := s.db.DB.QueryRow(`
 		SELECT id, username, password, pubkey
 		FROM users
 		WHERE username = ?
@@ -54,7 +50,6 @@ func GetUserByUsername(username string) (*models.User, error) {
 		return nil, err
 	}
 
-	// Если в БД NULL, записываем пустую строку, иначе — само значение
 	if rawPubKey.Valid {
 		user.PubKey = rawPubKey.String
 	} else {
@@ -65,9 +60,8 @@ func GetUserByUsername(username string) (*models.User, error) {
 	return &user, nil
 }
 
-// SavePubKey обновляет публичный ключ пользователя.
-func SavePubKey(userID, pubkey string) {
-	result, err := database.DB.Exec(`
+func (s *Storage) SavePubKey(userID, pubkey string) {
+	result, err := s.db.DB.Exec(`
         UPDATE users SET pubkey = ? WHERE id = ?
     `, pubkey, userID)
 
@@ -82,11 +76,10 @@ func SavePubKey(userID, pubkey string) {
 	}
 }
 
-// GetPubKey возвращает публичный ключ пользователя.
-func GetPubKey(userID string) (string, error) {
+func (s *Storage) GetPubKey(userID string) (string, error) {
 	var rawKey sql.NullString
 
-	err := database.DB.QueryRow(`
+	err := s.db.DB.QueryRow(`
 		SELECT pubkey FROM users WHERE id = ?
 	`, userID).Scan(&rawKey)
 
@@ -103,10 +96,9 @@ func GetPubKey(userID string) (string, error) {
 	return "", nil
 }
 
-// GetAllUsers возвращает список всех пользователей
-func GetAllUsers() ([]models.User, error) {
+func (s *Storage) GetAllUsers() ([]models.User, error) {
 
-	rows, err := database.DB.Query(`
+	rows, err := s.db.DB.Query(`
 		SELECT id, username
 		FROM users
 		ORDER BY username ASC

@@ -1,11 +1,9 @@
-package middlewares
+package auth
 
 import (
 	"context"
 	"net/http"
 	"strings"
-
-	"Synapse_server/utils"
 )
 
 type contextKey string
@@ -23,7 +21,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
-		userID, err := utils.ParseToken(tokenStr)
+		userID, err := ParseToken(tokenStr)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return

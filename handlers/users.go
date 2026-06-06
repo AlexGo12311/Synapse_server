@@ -3,13 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-
-	"Synapse_server/storage"
 )
 
-func GetUsers(w http.ResponseWriter, r *http.Request) {
+func (s *Server) GetUsers(w http.ResponseWriter, r *http.Request) {
 
-	users, err := storage.GetAllUsers()
+	users, err := s.store.GetAllUsers()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

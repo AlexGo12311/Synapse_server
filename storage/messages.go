@@ -1,13 +1,12 @@
 package storage
 
 import (
-	"Synapse_server/database"
 	"Synapse_server/models"
 	"database/sql"
 	"log"
 )
 
-// ===== ChatID =====
+// GetChatID генерирует уникальный ID чата между двумя пользователями
 func GetChatID(a, b string) string {
 	if a < b {
 		return a + ":" + b
@@ -15,18 +14,17 @@ func GetChatID(a, b string) string {
 	return b + ":" + a
 }
 
-// ===== SAVE MESSAGE =====
-func SaveMessage(msg models.Message) {
+// SaveMessage сохраняет сообщение в БД
+func (s *Storage) SaveMessage(msg models.Message) {
 
 	chatID := GetChatID(msg.From, msg.To)
 
-	// Если статус пустой при сохранении, ставим sent
 	status := msg.Status
 	if status == "" {
 		status = "sent"
 	}
 
-	_, err := database.DB.Exec(`
+	_, err := s.db.DB.Exec(`
         INSERT INTO messages
         (
             id,
@@ -51,7 +49,7 @@ func SaveMessage(msg models.Message) {
 		msg.KeySender,
 		msg.KeyReceiver,
 		msg.CreatedAt,
-		status, // СОХРАНЯЕМ СТАТУС
+		status,
 	)
 
 	if err != nil {
@@ -59,10 +57,10 @@ func SaveMessage(msg models.Message) {
 	}
 }
 
-// ===== GET MESSAGES =====
-func GetMessages(chatID string) ([]models.Message, error) {
+// GetMessages возвращает историю переписки
+func (s *Storage) GetMessages(chatID string) ([]models.Message, error) {
 
-	rows, err := database.DB.Query(`
+	rows, err := s.db.DB.Query(`
         SELECT
             id,
             sender,
@@ -88,7 +86,6 @@ func GetMessages(chatID string) ([]models.Message, error) {
 	for rows.Next() {
 
 		var msg models.Message
-		// Используем sql.NullString на случай, если в базе есть старые сообщения со значением NULL
 		var status sql.NullString
 
 		err := rows.Scan(
@@ -100,7 +97,7 @@ func GetMessages(chatID string) ([]models.Message, error) {
 			&msg.KeySender,
 			&msg.KeyReceiver,
 			&msg.CreatedAt,
-			&status, // СЧИТЫВАЕМ СТАТУС
+			&status,
 		)
 
 		if err != nil {
@@ -110,7 +107,6 @@ func GetMessages(chatID string) ([]models.Message, error) {
 
 		msg.Type = "message"
 
-		// Обрабатываем NULL
 		if status.Valid {
 			msg.Status = status.String
 		} else {
@@ -127,9 +123,9 @@ func GetMessages(chatID string) ([]models.Message, error) {
 	return messages, nil
 }
 
-// ===== UPDATE MESSAGE STATUS (НОВАЯ ФУНКЦИЯ) =====
-func UpdateMessageStatus(msgID string, newStatus string) error {
-	_, err := database.DB.Exec(`
+// UpdateMessageStatus обновляет статус доставки сообщения
+func (s *Storage) UpdateMessageStatus(msgID string, newStatus string) error {
+	_, err := s.db.DB.Exec(`
         UPDATE messages 
         SET status = ? 
         WHERE id = ?
