@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/joho/godotenv"
+
 	"Synapse_server/auth"
 	"Synapse_server/database"
 	"Synapse_server/handlers"
@@ -27,12 +29,23 @@ func enableCORS(h http.Handler) http.Handler {
 
 func main() {
 
-	// Инициализируем слои через New()
+	// 1. Загружаем переменные из .env файла
+	if err := godotenv.Load(); err != nil {
+		log.Println(".env файл не найден, используются системные переменные окружения")
+	}
+
+	// 2. Инициализируем секретный ключ для JWT
+	if err := auth.InitSecret(); err != nil {
+		log.Fatalf("Ошибка инициализации секретного ключа: %v", err)
+	}
+	log.Println("Секретный ключ JWT успешно загружен")
+
+	// 3. Инициализируем слои через New()
 	db := database.New()
 	store := storage.New(db)
 	hub := storage.NewClientsHub()
 
-	// Собираем сервер с внедренными зависимостями
+	// 4. Собираем сервер с внедрёнными зависимостями
 	server := handlers.NewServer(store, hub)
 
 	mux := http.NewServeMux()

@@ -1,32 +1,28 @@
-### Xcode .gitignore ###
+# Переменные окружения
+.env
+.env.local
+.env.production
 
-## User settings
-xcuserdata/
+# Скомпилированные бинарники
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+Synapse_server
 
-# CocoaPods
-Pods/ 
-Podfile.lock
+# База данных
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
 
-## Build generated
-build/
-DerivedData/
-
-## Xcode 8 and earlier
-*.xcscmblueprint
-*.xccheckout
-
-### Xcode Patch ###
-*.xcodeproj/*
-!*.xcodeproj/project.pbxproj
-!*.xcodeproj/xcshareddata/
-!*.xcworkspace/contents.xcworkspacedata
-/*.gcno
-**/xcshareddata/WorkspaceSettings.xcsettings
-
-# Ignore Mac DS Store files
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 .DS_Store
-*.xcuserstate
-Podfile.lock
 
-# Ignore sql db file
-chat.db
+# Зависимости Go (если используете vendor)
+vendor/
