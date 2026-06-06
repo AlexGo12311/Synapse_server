@@ -31,14 +31,14 @@ func main() {
 
 	// 1. Загружаем переменные из .env файла
 	if err := godotenv.Load(); err != nil {
-		log.Println(".env файл не найден, используются системные переменные окружения")
+		log.Println("⚠️  .env файл не найден, используются системные переменные окружения")
 	}
 
 	// 2. Инициализируем секретный ключ для JWT
 	if err := auth.InitSecret(); err != nil {
-		log.Fatalf("Ошибка инициализации секретного ключа: %v", err)
+		log.Fatalf("❌ Ошибка инициализации секретного ключа: %v", err)
 	}
-	log.Println("Секретный ключ JWT успешно загружен")
+	log.Println("✅ Секретный ключ JWT успешно загружен")
 
 	// 3. Инициализируем слои через New()
 	db := database.New()
@@ -55,7 +55,9 @@ func main() {
 	mux.HandleFunc("/ws", server.HandleConnections)
 	mux.Handle("/history", auth.AuthMiddleware(http.HandlerFunc(server.GetHistory)))
 	mux.Handle("/users", auth.AuthMiddleware(http.HandlerFunc(server.GetUsers)))
+	// 🆕 НОВЫЙ РОУТ: последние сообщения для превью
+	mux.Handle("/last-messages", auth.AuthMiddleware(http.HandlerFunc(server.GetLastMessages)))
 
-	log.Println("Server running on :8080")
+	log.Println("🚀 Server running on :8080")
 	http.ListenAndServe(":8080", enableCORS(mux))
 }

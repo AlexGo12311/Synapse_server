@@ -7,85 +7,483 @@ body {
     display: flex; 
     justify-content: center; 
     align-items: center; 
+    transition: background 0.3s, color 0.3s;
 }
 
-/* ===== ЭКРАН АВТОРИЗАЦИИ ===== */
+/* ============================================ */
+/* ============ CSS ПЕРЕМЕННЫЕ (СВЕТЛАЯ) ======= */
+/* ============================================ */
+
+:root {
+    --accent-color: #007bff;
+    --accent-color-hover: #0056b3;
+    --chat-bg: #e5ddd5;
+    --bubble-me: #d9fdd3;
+    --bubble-other: #ffffff;
+    --text-color: #111b21;
+    --secondary-text: #667781;
+    --sidebar-bg: #ffffff;
+    --border-color: #e0e0e0;
+    --header-bg: #f8f9fa;
+    --input-bg: #ffffff;
+    --hover-bg: #f8f9fa;
+    --panel-bg: #ffffff;
+    --system-text: #54656f;
+}
+
+/* ============================================ */
+/* ============ ТЁМНАЯ ТЕМА =================== */
+/* ============================================ */
+
+body.dark-theme {
+    background: #0e1621;
+    color: #ffffff;
+    
+    --accent-color: #5ca8f5;
+    --accent-color-hover: #4a95e2;
+    --chat-bg: #0e1621;
+    --bubble-me: #2b5278;
+    --bubble-other: #182533;
+    --text-color: #ffffff;
+    --secondary-text: #6c7883;
+    --sidebar-bg: #17212b;
+    --border-color: #0c1621;
+    --header-bg: #242f3d;
+    --input-bg: #242f3d;
+    --hover-bg: #2b3a4a;
+    --panel-bg: #17212b;
+    --system-text: #8a9ba8;
+}
+
+body.dark-theme #authScreen {
+    background: #17212b;
+    color: white;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+body.dark-theme #authScreen input {
+    background: #242f3d;
+    border-color: #0c1621;
+    color: white;
+}
+
+body.dark-theme #authScreen input:focus {
+    background: #2b3a4a;
+    border-color: var(--accent-color);
+}
+
+body.dark-theme .system-box {
+    background: rgba(255, 255, 255, 0.1);
+    color: #d1d5db;
+}
+
+/* ============================================ */
+/* ============ ЭКРАН АВТОРИЗАЦИИ ============= */
+/* ============================================ */
+
 #authScreen {
     background: white;
     padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-    width: 320px;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    width: 360px;
     text-align: center;
 }
-#authScreen h2 { margin-top: 0; color: #007bff; font-size: 28px; font-weight: 700; margin-bottom: 25px; }
+#authScreen h2 { 
+    margin-top: 0; 
+    color: var(--accent-color); 
+    font-size: 32px; 
+    font-weight: 700; 
+    margin-bottom: 30px;
+    letter-spacing: -0.5px;
+}
 #authScreen input {
     width: 100%;
-    padding: 12px;
+    padding: 14px 16px;
     margin: 8px 0;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
     box-sizing: border-box;
-    font-size: 14px;
+    font-size: 15px;
     background: #f8f9fa;
-    transition: border-color 0.2s;
+    transition: all 0.2s;
+    color: var(--text-color);
 }
 #authScreen input:focus {
-    border-color: #007bff;
+    border-color: var(--accent-color);
     outline: none;
     background: white;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
 }
-.auth-buttons { display: flex; gap: 10px; margin-top: 20px; }
+
+body.dark-theme #authScreen input:focus {
+    background: #2b3a4a;
+}
+
+.auth-buttons { display: flex; gap: 12px; margin-top: 24px; }
 .auth-buttons button {
     flex: 1;
-    padding: 12px;
+    padding: 14px;
     border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 15px;
+    transition: all 0.2s;
+}
+.auth-buttons button:hover { 
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.btn-login { background: var(--accent-color); color: white; }
+.btn-register { background: #28a745; color: white; }
+
+.auth-lang-switcher {
+    margin-top: 20px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.lang-btn {
+    padding: 6px 16px;
+    border: 1px solid var(--border-color);
+    background: transparent;
     border-radius: 6px;
     cursor: pointer;
-    font-weight: bold;
-    font-size: 14px;
-    transition: opacity 0.2s;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--secondary-text);
+    transition: all 0.2s;
 }
-.auth-buttons button:hover { opacity: 0.9; }
-.btn-login { background: #007bff; color: white; }
-.btn-register { background: #28a745; color: white; }
-#authError { color: #dc3545; font-size: 13px; min-height: 20px; margin-top: 8px; font-weight: 500; }
 
-/* ===== ЭКРАН МЕССЕНДЖЕРА ===== */
+body.dark-theme .lang-btn {
+    color: #8a9ba8;
+    border-color: #0c1621;
+}
+
+.lang-btn.active {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+#authError { 
+    color: #dc3545; 
+    font-size: 13px; 
+    min-height: 20px; 
+    margin-top: 12px; 
+    font-weight: 500; 
+}
+
+/* ============================================ */
+/* ============ ЭКРАН МЕССЕНДЖЕРА ============= */
+/* ============================================ */
+
 #chatScreen { 
     display: none; 
     width: 100vw; 
     height: 100vh; 
-    background: white;
+    background: var(--sidebar-bg);
     overflow: hidden;
+    color: var(--text-color);
 }
-.sidebar { width: 300px; border-right: 1px solid #e0e0e0; background: #ffffff; display: flex; flex-direction: column; }
+
+/* ============================================ */
+/* =============== SIDEBAR ==================== */
+/* ============================================ */
+
+.sidebar { 
+    width: 320px; 
+    border-right: 1px solid var(--border-color); 
+    background: var(--sidebar-bg); 
+    display: flex; 
+    flex-direction: column; 
+}
 
 .sidebar-header { 
-    padding: 20px 15px; 
-    background: #f8f9fa; 
-    font-weight: bold; 
-    border-bottom: 1px solid #e0e0e0; 
+    padding: 20px; 
+    background: var(--header-bg); 
+    border-bottom: 1px solid var(--border-color); 
     display: flex; 
     justify-content: space-between; 
     align-items: center;
+    gap: 12px;
 }
-.user-info { font-size: 16px; color: #333; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+
+.user-info { 
+    display: flex; 
+    align-items: center; 
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.my-username {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--input-bg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+
+.icon-btn:hover {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+    transform: rotate(45deg);
+}
+
+#themeToggle:hover {
+    transform: rotate(20deg);
+}
+
 .btn-logout {
-    padding: 6px 12px;
-    background: #fff;
+    background: var(--input-bg);
     color: #dc3545;
     border: 1px solid #dc3545;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 600;
-    transition: all 0.2s;
 }
-.btn-logout:hover { background: #dc3545; color: white; }
 
-.chat-area { flex: 1; display: flex; flex-direction: column; background: #f4f6f9; }
-.chat-header { padding: 18px 20px; background: #fff; border-bottom: 1px solid #e0e0e0; font-size: 16px; font-weight: 600; color: #333; }
+.btn-logout:hover { 
+    background: #dc3545; 
+    color: white; 
+    transform: none;
+}
+
+#usersList {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* ============================================ */
+/* ============ ЭЛЕМЕНТ СПИСКА ЧАТОВ ========== */
+/* ============================================ */
+
+.user-item { 
+    padding: 12px 16px; 
+    cursor: pointer; 
+    border-bottom: 1px solid var(--border-color); 
+    text-align: left; 
+    background: none; 
+    border-top: none; 
+    border-left: none; 
+    border-right: none; 
+    width: 100%; 
+    color: var(--text-color);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-item:hover { 
+    background: var(--hover-bg); 
+}
+
+.user-item.active { 
+    background: rgba(92, 168, 245, 0.1); 
+    color: var(--accent-color); 
+    border-left: 3px solid var(--accent-color);
+    padding-left: 13px;
+}
+
+.user-item-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    gap: 2px;
+}
+
+.user-item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-item-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-item.active .user-item-name {
+    color: var(--accent-color);
+}
+
+.user-item-time {
+    font-size: 11px;
+    color: var(--secondary-text);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.user-item-preview {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--secondary-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.user-item-preview-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.user-item-preview-prefix {
+    color: var(--accent-color);
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.user-item-unread {
+    background: var(--accent-color);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    flex-shrink: 0;
+}
+
+/* ============================================ */
+/* =============== АВАТАРКИ =================== */
+/* ============================================ */
+
+.avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 16px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    position: relative;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    user-select: none;
+}
+
+.avatar.small {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+}
+
+.avatar.large {
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+}
+
+.avatar-wrapper {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.presence-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #999;
+    border: 2px solid var(--sidebar-bg);
+    transition: background-color 0.3s ease;
+}
+
+.presence-indicator.online {
+    background-color: #4CAF50;
+    box-shadow: 0 0 6px rgba(76, 175, 80, 0.6);
+}
+
+.presence-indicator.offline {
+    background-color: #999;
+}
+
+/* ============================================ */
+/* =============== ОБЛАСТЬ ЧАТА =============== */
+/* ============================================ */
+
+.chat-area { 
+    flex: 1; 
+    display: flex; 
+    flex-direction: column; 
+    background: var(--chat-bg);
+    position: relative;
+}
+
+.chat-header { 
+    padding: 16px 24px; 
+    background: var(--header-bg); 
+    border-bottom: 1px solid var(--border-color); 
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    backdrop-filter: blur(10px);
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.chat-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.chat-header-label {
+    font-size: 12px;
+    color: var(--secondary-text);
+    font-weight: 500;
+}
+
+.chat-header-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-color);
+}
 
 #log { 
     flex: 1; 
@@ -93,56 +491,87 @@ body {
     padding: 20px; 
     display: flex;
     flex-direction: column;
-    gap: 4px; /* Уменьшили зазор для более плотного отображения */
-    background: #e5ddd5; 
+    gap: 6px;
+    background-image: var(--chat-bg-image);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    position: relative;
 }
 
-.input-area { display: flex; padding: 15px 20px; border-top: 1px solid #e0e0e0; background: #fff; align-items: center; }
+/* ============================================ */
+/* ============ ВВОД СООБЩЕНИЙ ================ */
+/* ============================================ */
+
+.input-area { 
+    display: flex; 
+    padding: 16px 24px; 
+    border-top: 1px solid var(--border-color); 
+    background: var(--header-bg); 
+    align-items: center; 
+    gap: 12px;
+}
+
 .input-area input { 
     flex: 1; 
-    padding: 12px 16px; 
-    border: 1px solid #e0e0e0; 
+    padding: 14px 20px; 
+    border: 2px solid var(--border-color); 
     border-radius: 24px; 
-    margin-right: 12px; 
-    font-size: 14px;
-    background: #f8f9fa;
+    font-size: 15px;
+    background: var(--input-bg);
+    color: var(--text-color);
     outline: none;
+    transition: all 0.2s;
 }
-.input-area input:focus { background: #fff; border-color: #007bff; }
+
+.input-area input::placeholder {
+    color: var(--secondary-text);
+}
+
+.input-area input:focus { 
+    border-color: var(--accent-color); 
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+.input-area input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .input-area button { 
-    padding: 12px 24px; 
-    background: #007bff; 
+    padding: 12px 28px; 
+    background: var(--accent-color); 
     color: white; 
     border: none; 
     border-radius: 24px; 
     cursor: pointer; 
     font-weight: 600;
-    font-size: 14px;
-    transition: background 0.2s;
+    font-size: 15px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
-.input-area button:hover { background: #0056b3; }
 
-.user-item { 
-    padding: 16px; 
-    cursor: pointer; 
-    border-bottom: 1px solid #f2f2f2; 
-    text-align: left; 
-    background: none; 
-    border-top: none; border-left: none; border-right: none; 
-    width: 100%; 
-    font-size: 15px; 
-    color: #495057;
-    font-weight: 500;
-    transition: background 0.2s;
+.input-area button:hover:not(:disabled) { 
+    background: var(--accent-color-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
-.user-item:hover { background: #f8f9fa; }
-.user-item.active { background: #e7f3ff; color: #007bff; font-weight: 600; }
 
-/* ===== АНИМАЦИЯ ПОЯВЛЕНИЯ В СТИЛЕ WHATSAPP ===== */
+.input-area button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ============================================ */
+/* =========== СООБЩЕНИЯ (BUBBLES) ============ */
+/* ============================================ */
+
 @keyframes waMessagePop {
     0% {
         opacity: 0;
-        transform: scale(0.94) translateY(12px);
+        transform: scale(0.92) translateY(16px);
     }
     100% {
         opacity: 1;
@@ -154,69 +583,48 @@ body {
     display: flex;
     width: 100%;
     margin-bottom: 2px;
-    /* Применяем анимацию на каждую добавленную строчку */
     animation: waMessagePop 0.22s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
     will-change: transform, opacity;
+    align-items: flex-end;
+    gap: 8px;
 }
-.message-row.me { justify-content: flex-end; } 
-.message-row.other { justify-content: flex-start; } 
 
-/* ===== СТРУКТУРА БАБЛОВ С УЧЕТОМ ВРЕМЕНИ ===== */
+.message-row.me { 
+    justify-content: flex-end; 
+}
+
+.message-row.other { 
+    justify-content: flex-start; 
+}
+
 .bubble {
-    max-width: 65%;
-    padding: 8px 12px 5px 14px;
-    border-radius: 12px;
+    max-width: 60%;
+    padding: 10px 14px 6px 14px;
+    border-radius: 16px;
     font-size: 14.5px;
     line-height: 1.4;
     word-wrap: break-word;
-    box-shadow: 0 1px 1.5px rgba(0,0,0,0.12);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     display: flex;
-    flex-direction: column; /* Элементы идут друг за другом вертикально */
+    flex-direction: column;
+    position: relative;
+    color: var(--text-color);
 }
+
 .message-row.me .bubble {
-    background: #d9fdd3; 
-    color: #111b21;
-    border-top-right-radius: 0px; /* Фирменный скошенный угол WhatsApp */
+    background: var(--bubble-me); 
+    border-bottom-right-radius: 4px;
 }
+
 .message-row.other .bubble {
-    background: #ffffff; 
-    color: #111b21;
-    border-top-left-radius: 0px;
+    background: var(--bubble-other); 
+    border-bottom-left-radius: 4px;
 }
 
 .bubble-text {
-    padding-right: 15px; /* Запас справа, чтобы текст не наезжал на время */
+    padding-right: 15px;
 }
 
-/* Стилизация блока с временем */
-.msg-time {
-    font-size: 10.5px;
-    color: #667781;
-    align-self: flex-end; /* Сдвигает время строго в правый нижний угол бабла */
-    margin-top: 2px;
-    user-select: none; /* Запрещаем выделение времени при копировании текста */
-}
-
-/* Системные строки */
-.system-row {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    margin: 8px 0;
-    animation: waMessagePop 0.25s ease-out forwards;
-}
-.system-box {
-    background: rgba(11, 20, 26, 0.1);
-    color: #54656f;
-    font-size: 12px;
-    padding: 5px 12px;
-    border-radius: 8px;
-    max-width: 80%;
-    text-align: center;
-}
-.system-row.error .system-box { background: #ffebee; color: #c62828; }
-
-/* ===== СТАТУСЫ ДОСТАВКИ И ВРЕМЯ ===== */
 .msg-meta {
     display: flex;
     align-items: center;
@@ -228,7 +636,7 @@ body {
 
 .msg-time {
     font-size: 10.5px;
-    color: #667781;
+    color: var(--secondary-text);
     user-select: none;
 }
 
@@ -240,13 +648,11 @@ body {
     font-weight: bold;
 }
 
-/* 1 серая галочка (Отправлено) */
 .status-sent::after { 
     content: '✓'; 
     color: #8b9eb7; 
 }
 
-/* 2 серые галочки (Доставлено) */
 .status-delivered::after { 
     content: '✓✓'; 
     color: #8b9eb7; 
@@ -254,29 +660,519 @@ body {
     padding-right: 3px;
 }
 
-/* 2 синие галочки (Прочитано) */
 .status-read::after { 
     content: '✓✓'; 
-    color: #34b7f1; 
+    color: var(--accent-color); 
     letter-spacing: -3px;
     padding-right: 3px;
 }
 
-.presence-indicator {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
+/* ============================================ */
+/* =========== СИСТЕМНЫЕ СООБЩЕНИЯ ============ */
+/* ============================================ */
+
+.system-row {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 8px 0;
+    animation: waMessagePop 0.25s ease-out forwards;
+}
+
+.system-box {
+    background: rgba(11, 20, 26, 0.6);
+    color: white;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 12px;
+    max-width: 80%;
+    text-align: center;
+    backdrop-filter: blur(10px);
+}
+
+.system-row.error .system-box { 
+    background: rgba(220, 53, 69, 0.9); 
+}
+
+/* ============================================ */
+/* ============ ПАНЕЛЬ НАСТРОЕК =============== */
+/* ============================================ */
+
+.settings-panel {
+    position: fixed;
+    top: 0;
+    right: -400px;
+    width: 380px;
+    height: 100vh;
+    background: var(--panel-bg);
+    color: var(--text-color);
+    box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+    z-index: 1000;
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.settings-panel.open {
+    right: 0;
+}
+
+.settings-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--header-bg);
+}
+
+.settings-header h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.settings-close {
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    margin-right: 8px;
-    background-color: #999; /* Серый по умолчанию (оффлайн) */
-    transition: background-color 0.3s ease;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 24px;
+    color: var(--secondary-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
 }
 
-.presence-indicator.online {
-    background-color: #4CAF50; /* Зеленый (онлайн) */
-    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5); /* Небольшое свечение */
+.settings-close:hover {
+    background: var(--hover-bg);
+    color: var(--text-color);
 }
 
-.presence-indicator.offline {
-    background-color: #999;
+.settings-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.settings-section {
+    margin-bottom: 28px;
+}
+
+.settings-section h4 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--secondary-text);
+    margin: 0 0 14px 0;
+    font-weight: 600;
+}
+
+/* ===== СЕЛЕКТОР ЯЗЫКА ===== */
+.language-selector {
+    display: flex;
+    gap: 10px;
+}
+
+.lang-option {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid var(--border-color);
+    background: transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-color);
+    transition: all 0.2s;
+}
+
+.lang-option:hover {
+    border-color: var(--accent-color);
+}
+
+.lang-option.active {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+/* ===== ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМА ===== */
+.theme-mode-toggle {
+    display: flex;
+    gap: 10px;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 14px;
+    border: 2px solid var(--border-color);
+    background: transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-color);
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.mode-btn span:first-child {
+    font-size: 24px;
+}
+
+.mode-btn:hover {
+    border-color: var(--accent-color);
+}
+
+.mode-btn.active {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+/* ===== ЦВЕТОВЫЕ ТЕМЫ ===== */
+.themes-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.theme-card {
+    border-radius: 12px;
+    padding: 14px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.theme-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.theme-card.active {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.2);
+}
+
+.theme-card.active::after {
+    content: '✓';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    background: var(--accent-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.theme-name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.theme-preview {
+    display: flex;
+    gap: 4px;
+    margin-top: auto;
+}
+
+.theme-preview-bubble {
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #111;
+    background: white;
+}
+
+.theme-preview-bubble.me {
+    margin-left: auto;
+}
+
+/* Оверлей когда открыты настройки */
+.settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+.settings-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* Скроллбар */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(128,128,128,0.4);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(128,128,128,0.6);
+}
+
+body.dark-theme ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+}
+
+body.dark-theme ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* ============================================ */
+/* ===== КНОПКА КОДА ШИФРОВАНИЯ В ШАПКЕ ======= */
+/* ============================================ */
+
+.encryption-btn {
+    background: var(--input-bg);
+    color: var(--accent-color);
+    border: 1px solid var(--accent-color);
+}
+
+.encryption-btn:hover {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+    transform: rotate(15deg);
+}
+
+/* ============================================ */
+/* === МОДАЛЬНОЕ ОКНО КОДА ШИФРОВАНИЯ ========= */
+/* ============================================ */
+
+.encryption-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+    backdrop-filter: blur(4px);
+}
+
+.encryption-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.encryption-modal {
+    background: var(--panel-bg);
+    color: var(--text-color);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    transform: scale(0.9);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.encryption-overlay.open .encryption-modal {
+    transform: scale(1);
+}
+
+.encryption-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--header-bg);
+    border-radius: 16px 16px 0 0;
+}
+
+.encryption-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.encryption-body {
+    padding: 24px;
+}
+
+.encryption-info {
+    font-size: 14px;
+    color: var(--secondary-text);
+    line-height: 1.5;
+    margin: 0 0 20px 0;
+    text-align: center;
+}
+
+.encryption-section {
+    margin-bottom: 20px;
+}
+
+.encryption-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--secondary-text);
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.encryption-shared-icon {
+    font-size: 14px;
+}
+
+.encryption-you-badge {
+    background: var(--accent-color);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.encryption-code {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: break-all;
+    color: var(--text-color);
+    letter-spacing: 1.5px;
+    user-select: all;
+    text-align: center;
+}
+
+.encryption-section:first-of-type .encryption-code {
+    background: linear-gradient(135deg, rgba(0,123,255,0.1), rgba(0,123,255,0.05));
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    font-weight: 600;
+    font-size: 15px;
+}
+
+body.dark-theme .encryption-section:first-of-type .encryption-code {
+    background: linear-gradient(135deg, rgba(92,168,245,0.15), rgba(92,168,245,0.05));
+}
+
+.btn-copy {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 12px;
+    transition: all 0.2s;
+}
+
+.btn-copy:hover {
+    background: var(--accent-color-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.btn-copy.copied {
+    background: #28a745;
+}
+
+.encryption-warning {
+    margin-top: 20px;
+    padding: 12px 14px;
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid #ffc107;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--secondary-text);
+}
+
+body.dark-theme .encryption-warning {
+    background: rgba(255, 193, 7, 0.08);
+    color: #ffc107;
+}
+
+/* Системное сообщение об обмене ключами */
+.system-row.key-exchange .system-box {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.15), rgba(40, 167, 69, 0.08));
+    color: #28a745;
+    border: 1px solid rgba(40, 167, 69, 0.3);
+    cursor: pointer;
+    transition: all 0.2s;
+    max-width: 90%;
+    padding: 10px 16px;
+}
+
+body.dark-theme .system-row.key-exchange .system-box {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(76, 175, 80, 0.1));
+    color: #81c784;
+    border-color: rgba(76, 175, 80, 0.3);
+}
+
+.system-row.key-exchange .system-box:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.2);
+}
+
+.key-exchange-fingerprint {
+    display: block;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 11px;
+    margin-top: 6px;
+    letter-spacing: 1px;
+    opacity: 0.85;
 }
