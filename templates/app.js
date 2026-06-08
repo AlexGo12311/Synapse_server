@@ -13,18 +13,25 @@ let userId = null;
 let ws = null;
 let activeTargetId = null;
 let activeTargetName = null;
+let currentTab = 'chats'; // chats | keys | settings
 
 const shownMessages = new Set();
 const publicKeys = {};
 const pendingMessages = {};
 const userCache = new Map();
+const pendingReadQueue = new Map();
+const shownKeyExchanges = new Set();
 
-// ✅ НОВОЕ: Очередь сообщений, ждущих отправки статуса "read"
-// (когда ключ ещё не получен)
-const pendingReadQueue = new Map(); // targetId -> [{id, from}, ...]
+// ===== WebSocket reconnect =====
+let wsReconnectTimer = null;
+let wsReconnectAttempts = 0;
+const WS_MAX_RECONNECT = 10;
+const WS_RECONNECT_BASE_DELAY = 1000;
+const WS_RECONNECT_MAX_DELAY = 30000;
 
-// ✅ НОВОЕ: Хранилище показанных кодов шифрования, чтобы не спамить
-const shownKeyExchanges = new Set(); // "myKey-peerKey"
+// ===== Chat search =====
+let chatSearchMatches = [];
+let chatSearchActiveIndex = -1;
 
 // ============================================
 // ============ ЛОКАЛИЗАЦИЯ ==================
@@ -61,8 +68,23 @@ const I18N = {
         copied: "✓ Copied!",
         encryption_warning: "If this code changes, it may mean your contact reinstalled the app or someone is trying to intercept your conversation.",
         key_exchange: "🔐 Encryption established",
-        key_exchange_click: "Click to verify code",
-        need_peer_key: "Waiting for peer's key..."
+        need_peer_key: "Waiting for peer's key...",
+        // НОВОЕ:
+        search_chats: "Search chats...",
+        search_messages: "Search in conversation...",
+        no_results: "No chats found",
+        chats_tab: "Chats",
+        keys_tab: "Keys",
+        settings_tab: "Settings",
+        your_key_title: "Your Encryption Key",
+        your_key_description: "Share this code with contacts so they can verify your identity.",
+        copy_key: "📋 Copy My Code",
+        keys_warning: "If your code changes unexpectedly, it may indicate a security issue.",
+        logout: "Log Out",
+        connected: "Connected",
+        connecting: "Connecting...",
+        reconnecting: "Reconnecting",
+        disconnected: "Connection lost"
     },
     ru: {
         login: "Войти",
@@ -94,8 +116,23 @@ const I18N = {
         copied: "✓ Скопировано!",
         encryption_warning: "Если этот код изменился — возможно, собеседник переустановил приложение или кто-то пытается перехватить переписку.",
         key_exchange: "🔐 Шифрование установлено",
-        key_exchange_click: "Нажмите для проверки кода",
-        need_peer_key: "Ожидание ключа собеседника..."
+        need_peer_key: "Ожидание ключа собеседника...",
+        // НОВОЕ:
+        search_chats: "Поиск чатов...",
+        search_messages: "Поиск в переписке...",
+        no_results: "Чаты не найдены",
+        chats_tab: "Чаты",
+        keys_tab: "Ключи",
+        settings_tab: "Настройки",
+        your_key_title: "Ваш ключ шифрования",
+        your_key_description: "Поделитесь этим кодом с контактами, чтобы они могли подтвердить вашу личность.",
+        copy_key: "📋 Скопировать мой код",
+        keys_warning: "Если ваш код неожиданно изменился, это может указывать на проблему безопасности.",
+        logout: "Выйти",
+        connected: "Подключено",
+        connecting: "Подключение...",
+        reconnecting: "Переподключение",
+        disconnected: "Соединение потеряно"
     }
 };
 
@@ -132,6 +169,13 @@ function setLanguage(lang) {
         btn.classList.toggle('active', btn.dataset.lang === lang);
     });
     
+    // Обновляем статус подключения с новым языком
+    const statusBar = document.getElementById('statusBar');
+    if (statusBar) {
+        const currentStatus = statusBar.className.match(/status-(\w+)/)?.[1] || 'connecting';
+        updateConnectionStatus(currentStatus);
+    }
+    
     refreshAllPreviews();
 }
 
@@ -146,14 +190,14 @@ function refreshAllPreviews() {
 // ============================================
 
 const THEMES = [
-    { name: "Ocean Blue", wallpaper: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", accent: "#4A90E2", accentHover: "#357ABD", bubbleMe: "#D6EAF8", bubbleMeDark: "#2b5278" },
-    { name: "Forest", wallpaper: "linear-gradient(135deg, #134E5E 0%, #71B280 100%)", accent: "#27AE60", accentHover: "#229954", bubbleMe: "#D5F5E3", bubbleMeDark: "#1e5a3f" },
-    { name: "Sunset", wallpaper: "linear-gradient(135deg, #FF6B6B 0%, #FFA500 50%, #FFE66D 100%)", accent: "#E67E22", accentHover: "#D35400", bubbleMe: "#FDEBD0", bubbleMeDark: "#7d4a1f" },
-    { name: "Night Sky", wallpaper: "linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%)", accent: "#3498DB", accentHover: "#2980B9", bubbleMe: "#AED6F1", bubbleMeDark: "#2b5278" },
-    { name: "Rose Gold", wallpaper: "linear-gradient(135deg, #E8B4B8 0%, #D4A5A5 50%, #C89696 100%)", accent: "#C0392B", accentHover: "#A93226", bubbleMe: "#FADBD8", bubbleMeDark: "#7d3a2f" },
-    { name: "Mint", wallpaper: "linear-gradient(135deg, #A8E6CF 0%, #DCEDC1 50%, #FFD3B6 100%)", accent: "#16A085", accentHover: "#138D75", bubbleMe: "#D1F2EB", bubbleMeDark: "#1e5a4d" },
-    { name: "Purple Haze", wallpaper: "linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)", accent: "#8E44AD", accentHover: "#7D3C98", bubbleMe: "#E8DAEF", bubbleMeDark: "#5a2f7a" },
-    { name: "Classic", wallpaper: "linear-gradient(135deg, #ECE9E6 0%, #FFFFFF 100%)", accent: "#007BFF", accentHover: "#0056B3", bubbleMe: "#D9FDD3", bubbleMeDark: "#2b5278" }
+    { name: "Ocean Blue", wallpaper: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", wallpaperDark: "linear-gradient(135deg, #1e3a8a 0%, #4c1d95 100%)", accent: "#4A90E2", accentHover: "#357ABD", bubbleMe: "#D6EAF8", bubbleMeDark: "#2b5278" },
+    { name: "Forest", wallpaper: "linear-gradient(135deg, #134E5E 0%, #71B280 100%)", wallpaperDark: "linear-gradient(135deg, #0a2e26 0%, #1e5a3f 100%)", accent: "#27AE60", accentHover: "#229954", bubbleMe: "#D5F5E3", bubbleMeDark: "#1e5a3f" },
+    { name: "Sunset", wallpaper: "linear-gradient(135deg, #FF6B6B 0%, #FFA500 50%, #FFE66D 100%)", wallpaperDark: "linear-gradient(135deg, #7d1f1f 0%, #7d4a1f 50%, #5a4318 100%)", accent: "#E67E22", accentHover: "#D35400", bubbleMe: "#FDEBD0", bubbleMeDark: "#7d4a1f" },
+    { name: "Night Sky", wallpaper: "linear-gradient(135deg, #2C3E50 0%, #4CA1AF 100%)", wallpaperDark: "linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%)", accent: "#3498DB", accentHover: "#2980B9", bubbleMe: "#AED6F1", bubbleMeDark: "#2b5278" },
+    { name: "Rose Gold", wallpaper: "linear-gradient(135deg, #E8B4B8 0%, #D4A5A5 50%, #C89696 100%)", wallpaperDark: "linear-gradient(135deg, #3d1f2f 0%, #4d2a2a 50%, #5a2f2f 100%)", accent: "#C0392B", accentHover: "#A93226", bubbleMe: "#FADBD8", bubbleMeDark: "#7d3a2f" },
+    { name: "Mint", wallpaper: "linear-gradient(135deg, #A8E6CF 0%, #DCEDC1 50%, #FFD3B6 100%)", wallpaperDark: "linear-gradient(135deg, #1e3a2f 0%, #2d4a3f 50%, #3a4a2f 100%)", accent: "#16A085", accentHover: "#138D75", bubbleMe: "#D1F2EB", bubbleMeDark: "#1e5a4d" },
+    { name: "Purple Haze", wallpaper: "linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)", wallpaperDark: "linear-gradient(135deg, #2d0a4d 0%, #1a0033 100%)", accent: "#8E44AD", accentHover: "#7D3C98", bubbleMe: "#E8DAEF", bubbleMeDark: "#5a2f7a" },
+    { name: "Classic", wallpaper: "linear-gradient(135deg, #ECE9E6 0%, #FFFFFF 100%)", wallpaperDark: "linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%)", accent: "#007BFF", accentHover: "#0056B3", bubbleMe: "#D9FDD3", bubbleMeDark: "#2b5278" }
 ];
 
 let currentThemeIndex = 0;
@@ -221,6 +265,253 @@ function formatTime(timeInput) {
 }
 
 // ============================================
+// ============ STATUS BAR (ПОДКЛЮЧЕНИЕ) =======
+// ============================================
+
+function updateConnectionStatus(status, details = '') {
+    const bar = document.getElementById('statusBar');
+    if (!bar) return;
+    
+    const text = bar.querySelector('.status-text');
+    
+    bar.className = 'status-bar status-' + status;
+    
+    const messages = {
+        connected: t('connected'),
+        connecting: t('connecting'),
+        reconnecting: t('reconnecting') + (details ? ` (${details})` : ''),
+        disconnected: t('disconnected')
+    };
+    
+    text.textContent = messages[status] || status;
+}
+
+// ============================================
+// ============ ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК ==========
+// ============================================
+
+function switchTab(tabName) {
+    currentTab = tabName;
+    
+    // Обновляем кнопки tabbar
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabName);
+    });
+    
+    // Переключаем tab panes
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+        pane.classList.toggle('active', pane.id === 'tab-' + tabName);
+    });
+    
+    // Показываем/скрываем поиск (только во вкладке chats)
+    const searchContainer = document.getElementById('searchContainer');
+    if (searchContainer) {
+        searchContainer.classList.toggle('hidden', tabName !== 'chats');
+    }
+    
+    // Если открыли Keys — загружаем fingerprint
+    if (tabName === 'keys') {
+        updateMyFingerprintDisplay();
+    }
+}
+
+async function updateMyFingerprintDisplay() {
+    const el = document.getElementById('myFingerprint');
+    if (!el) return;
+    
+    if (!publicKeyBase64) {
+        el.textContent = 'Loading...';
+        return;
+    }
+    
+    const fp = await getMyFingerprint();
+    el.textContent = fp.full;
+}
+
+async function copyMyFingerprint() {
+    const fp = await getMyFingerprint();
+    if (!fp || !fp.full || fp.full === '—') return;
+    
+    try {
+        await navigator.clipboard.writeText(fp.full);
+        const btn = document.querySelector('.keys-copy-btn');
+        const originalText = btn.textContent;
+        btn.textContent = t('copied');
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.classList.remove('copied');
+        }, 1500);
+    } catch (e) {
+        console.log("Copy failed:", e);
+    }
+}
+
+// ============================================
+// ============ ПОИСК ПО ЧАТАМ ================
+// ============================================
+
+function initChatListSearch() {
+    const input = document.getElementById('searchInput');
+    const clearBtn = document.getElementById('searchClear');
+    
+    if (!input) return;
+    
+    input.addEventListener('input', (e) => {
+        const query = e.target.value.trim();
+        clearBtn.style.display = query ? 'block' : 'none';
+        filterChats(query);
+    });
+    
+    clearBtn.addEventListener('click', () => {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        filterChats('');
+        input.focus();
+    });
+}
+
+function filterChats(query) {
+    const items = document.querySelectorAll('.user-item');
+    const emptyState = document.getElementById('searchEmptyState');
+    let visibleCount = 0;
+    
+    items.forEach(item => {
+        const username = (item.dataset.username || '').toLowerCase();
+        const matches = !query || username.includes(query.toLowerCase());
+        item.style.display = matches ? 'flex' : 'none';
+        if (matches) visibleCount++;
+    });
+    
+    if (emptyState) {
+        emptyState.style.display = (query && visibleCount === 0) ? 'flex' : 'none';
+    }
+}
+
+// ============================================
+// ============ ПОИСК В ЧАТЕ ==================
+// ============================================
+
+function openChatSearch() {
+    const panel = document.getElementById('chatSearchPanel');
+    const input = document.getElementById('chatSearchInput');
+    if (!panel || !input) return;
+    
+    panel.style.display = 'flex';
+    input.value = '';
+    input.focus();
+    chatSearchMatches = [];
+    chatSearchActiveIndex = -1;
+    updateChatSearchCounter();
+    
+    // Навешиваем обработчик один раз
+    if (!input.hasAttribute('data-listener-attached')) {
+        input.addEventListener('input', onChatSearchInput);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) chatSearchPrev();
+                else chatSearchNext();
+            } else if (e.key === 'Escape') {
+                closeChatSearch();
+            }
+        });
+        input.setAttribute('data-listener-attached', 'true');
+    }
+}
+
+function closeChatSearch() {
+    const panel = document.getElementById('chatSearchPanel');
+    const logDiv = getLogDiv();
+    const input = document.getElementById('chatSearchInput');
+    
+    if (panel) panel.style.display = 'none';
+    if (input) input.value = '';
+    if (logDiv) logDiv.classList.remove('chat-searching');
+    
+    // Убираем все подсветки
+    document.querySelectorAll('.message-row.search-hit, .message-row.search-hit-active').forEach(row => {
+        row.classList.remove('search-hit', 'search-hit-active');
+    });
+    
+    chatSearchMatches = [];
+    chatSearchActiveIndex = -1;
+}
+
+function onChatSearchInput(e) {
+    const query = e.target.value.trim();
+    const logDiv = getLogDiv();
+    
+    if (!logDiv) return;
+    
+    // Убираем старые классы
+    document.querySelectorAll('.message-row.search-hit, .message-row.search-hit-active').forEach(row => {
+        row.classList.remove('search-hit', 'search-hit-active');
+    });
+    
+    if (!query) {
+        logDiv.classList.remove('chat-searching');
+        chatSearchMatches = [];
+        chatSearchActiveIndex = -1;
+        updateChatSearchCounter();
+        return;
+    }
+    
+    logDiv.classList.add('chat-searching');
+    chatSearchMatches = [];
+    
+    const rows = logDiv.querySelectorAll('.message-row.me, .message-row.other');
+    rows.forEach(row => {
+        const text = row.querySelector('.bubble-text')?.textContent || '';
+        if (text.toLowerCase().includes(query.toLowerCase())) {
+            row.classList.add('search-hit');
+            chatSearchMatches.push(row);
+        }
+    });
+    
+    chatSearchActiveIndex = chatSearchMatches.length > 0 ? 0 : -1;
+    updateChatSearchActive();
+    updateChatSearchCounter();
+}
+
+function updateChatSearchActive() {
+    document.querySelectorAll('.message-row.search-hit-active').forEach(row => {
+        row.classList.remove('search-hit-active');
+    });
+    
+    if (chatSearchActiveIndex >= 0 && chatSearchMatches[chatSearchActiveIndex]) {
+        const active = chatSearchMatches[chatSearchActiveIndex];
+        active.classList.add('search-hit-active');
+        active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+function updateChatSearchCounter() {
+    const counter = document.getElementById('chatSearchCounter');
+    if (!counter) return;
+    
+    if (chatSearchMatches.length === 0) {
+        counter.textContent = '0/0';
+    } else {
+        counter.textContent = `${chatSearchActiveIndex + 1}/${chatSearchMatches.length}`;
+    }
+}
+
+function chatSearchNext() {
+    if (chatSearchMatches.length === 0) return;
+    chatSearchActiveIndex = (chatSearchActiveIndex + 1) % chatSearchMatches.length;
+    updateChatSearchActive();
+    updateChatSearchCounter();
+}
+
+function chatSearchPrev() {
+    if (chatSearchMatches.length === 0) return;
+    chatSearchActiveIndex = (chatSearchActiveIndex - 1 + chatSearchMatches.length) % chatSearchMatches.length;
+    updateChatSearchActive();
+    updateChatSearchCounter();
+}
+
+// ============================================
 // ========== ЛОГИРОВАНИЕ СООБЩЕНИЙ ==========
 // ============================================
 
@@ -259,7 +550,6 @@ function logMessage(id, text, type, timeStr = "", status = "sent", username = nu
         bubble.appendChild(metaDiv);
         row.appendChild(bubble);
     } else if (type === "key_exchange") {
-        // ✅ НОВОЕ: Системное сообщение об обмене ключами
         row.className = "system-row key-exchange";
         const sysBox = document.createElement("div");
         sysBox.className = "system-box";
@@ -268,16 +558,14 @@ function logMessage(id, text, type, timeStr = "", status = "sent", username = nu
         mainText.textContent = text;
         sysBox.appendChild(mainText);
         
-        if (username) { // username здесь содержит fingerprint
+        if (username) {
             const fingerprintSpan = document.createElement("span");
             fingerprintSpan.className = "key-exchange-fingerprint";
             fingerprintSpan.textContent = username;
             sysBox.appendChild(fingerprintSpan);
         }
         
-        // Клик открывает модальное окно
         sysBox.onclick = () => openEncryptionModal();
-        
         row.appendChild(sysBox);
     } else {
         row.className = `system-row ${type === 'error' ? 'error' : ''}`;
@@ -311,11 +599,9 @@ async function openEncryptionModal() {
     const sharedCodeEl = document.getElementById('sharedCode');
     const peerNameLabel = document.getElementById('peerNameLabel');
     
-    // Обновляем метку с именем собеседника
     const peerLabelBase = currentLang === 'ru' ? `Ключ ${activeTargetName}` : `${activeTargetName}'s Key`;
     peerNameLabel.textContent = peerLabelBase;
     
-    // Получаем fingerprint'ы
     const myFP = await getMyFingerprint();
     const peerFP = await getPeerFingerprint(activeTargetId);
     
@@ -323,7 +609,6 @@ async function openEncryptionModal() {
     
     if (peerFP) {
         peerCodeEl.textContent = peerFP.full;
-        // ✅ Общий код = XOR от обоих fingerprint'ов (уникален для пары)
         const sharedRaw = xorHexStrings(myFP.raw, peerFP.raw);
         const sharedGroups = [];
         for (let i = 0; i < sharedRaw.length; i += 5) {
@@ -361,9 +646,6 @@ async function copyEncryptionCode() {
     }
 }
 
-/**
- * XOR двух hex-строк для создания уникального "общего кода"
- */
 function xorHexStrings(hex1, hex2) {
     const len = Math.min(hex1.length, hex2.length);
     let result = '';
@@ -375,14 +657,9 @@ function xorHexStrings(hex1, hex2) {
     return result;
 }
 
-// ============================================
-// ==== ПОКАЗ СООБЩЕНИЯ ОБ ОБМЕНЕ КЛЮЧАМИ ====
-// ============================================
-
 async function showKeyExchangeIfNeeded(targetId) {
     if (!targetId || !publicKeys[targetId]) return;
     
-    // Создаём уникальный идентификатор пары ключей
     const myFP = await getMyFingerprint();
     const peerFP = await getPeerFingerprint(targetId);
     
@@ -390,10 +667,9 @@ async function showKeyExchangeIfNeeded(targetId) {
     
     const pairId = `${myFP.raw.slice(0, 10)}-${peerFP.raw.slice(0, 10)}`;
     
-    if (shownKeyExchanges.has(pairId)) return; // Уже показывали
+    if (shownKeyExchanges.has(pairId)) return;
     shownKeyExchanges.add(pairId);
     
-    // Показываем системное сообщение
     logMessage(null, t('key_exchange'), "key_exchange", formatTime(), "sent", peerFP.short);
 }
 
@@ -411,7 +687,7 @@ function applyTheme(themeIndex) {
     root.style.setProperty('--accent-color', theme.accent);
     root.style.setProperty('--accent-color-hover', theme.accentHover);
     root.style.setProperty('--bubble-me', isDark ? theme.bubbleMeDark : theme.bubbleMe);
-    root.style.setProperty('--chat-bg-image', theme.wallpaper);
+    root.style.setProperty('--chat-bg-image', isDark ? theme.wallpaperDark : theme.wallpaper);
     
     currentThemeIndex = themeIndex;
     
@@ -437,14 +713,8 @@ function setThemeMode(mode) {
         btn.classList.toggle('active', btn.dataset.mode === mode);
     });
     
-    const toggle = document.getElementById('themeToggle');
-    if (toggle) toggle.textContent = mode === 'dark' ? '☀️' : '🌙';
-    
     applyTheme(currentThemeIndex);
-}
-
-function toggleThemeMode() {
-    setThemeMode(currentThemeMode === 'dark' ? 'light' : 'dark');
+    renderThemesGrid();
 }
 
 function loadSavedTheme() {
@@ -470,11 +740,12 @@ function renderThemesGrid() {
     if (!grid) return;
     
     grid.innerHTML = '';
+    const isDark = currentThemeMode === 'dark';
     
     THEMES.forEach((theme, idx) => {
         const card = document.createElement('div');
         card.className = 'theme-card';
-        card.style.background = theme.wallpaper;
+        card.style.background = isDark ? theme.wallpaperDark : theme.wallpaper;
         
         if (idx === currentThemeIndex) card.classList.add('active');
         
@@ -489,11 +760,16 @@ function renderThemesGrid() {
         const otherBubble = document.createElement('div');
         otherBubble.className = 'theme-preview-bubble';
         otherBubble.textContent = 'Hi!';
+        if (isDark) {
+            otherBubble.style.background = '#182533';
+            otherBubble.style.color = 'white';
+        }
         preview.appendChild(otherBubble);
         
         const meBubble = document.createElement('div');
         meBubble.className = 'theme-preview-bubble me';
-        meBubble.style.background = theme.bubbleMe;
+        meBubble.style.background = isDark ? theme.bubbleMeDark : theme.bubbleMe;
+        if (isDark) meBubble.style.color = 'white';
         meBubble.textContent = 'Hey!';
         preview.appendChild(meBubble);
         
@@ -504,29 +780,20 @@ function renderThemesGrid() {
 }
 
 // ============================================
-// ========== ПАНЕЛЬ НАСТРОЕК ================
+// ========== ИНИЦИАЛИЗАЦИЯ UI ================
 // ============================================
 
-function openSettings() {
-    document.getElementById('settingsPanel').classList.add('open');
-    document.getElementById('settingsOverlay').classList.add('open');
-}
-
-function closeSettings() {
-    document.getElementById('settingsPanel').classList.remove('open');
-    document.getElementById('settingsOverlay').classList.remove('open');
-}
-
-function initSettingsPanel() {
-    document.getElementById('settingsBtn')?.addEventListener('click', openSettings);
-    document.getElementById('settingsClose')?.addEventListener('click', closeSettings);
-    document.getElementById('settingsOverlay')?.addEventListener('click', closeSettings);
-    document.getElementById('themeToggle')?.addEventListener('click', toggleThemeMode);
+function initUI() {
+    // Поиск по чатам
+    initChatListSearch();
     
-    // ✅ НОВОЕ: Обработчик кнопки кода шифрования
+    // Кнопка поиска в чате
+    document.getElementById('chatSearchBtn')?.addEventListener('click', openChatSearch);
+    
+    // Кнопка кода шифрования
     document.getElementById('encryptionBtn')?.addEventListener('click', openEncryptionModal);
     
-    // ✅ НОВОЕ: Закрытие модального окна по клику на оверлей
+    // Закрытие модального окна шифрования
     document.getElementById('encryptionOverlay')?.addEventListener('click', (e) => {
         if (e.target.id === 'encryptionOverlay') closeEncryptionModal();
     });
@@ -594,19 +861,13 @@ async function loadLastMessages() {
 }
 
 // ============================================
-// ======= ФУНКЦИЯ ОТПРАВКИ READ СТАТУСА ======
+// ======= ОТПРАВКА READ СТАТУСА ==============
 // ============================================
 
-/**
- * ✅ ИСПРАВЛЕНО: Безопасная отправка статуса "read".
- * Если ключ ещё не получен - ставим в очередь.
- */
 function markAsRead(msgId, fromId) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     
-    // Проверяем, есть ли у нас ключ отправителя
     if (!publicKeys[fromId]) {
-        // Ставим в очередь
         if (!pendingReadQueue.has(fromId)) {
             pendingReadQueue.set(fromId, []);
         }
@@ -614,7 +875,6 @@ function markAsRead(msgId, fromId) {
         return;
     }
     
-    // Отправляем сразу
     ws.send(JSON.stringify({
         type: "status_update",
         id: msgId,
@@ -623,9 +883,6 @@ function markAsRead(msgId, fromId) {
     }));
 }
 
-/**
- * ✅ ИСПРАВЛЕНО: При получении ключа - отправляем "read" для всех накопленных
- */
 function flushPendingReads(fromId) {
     if (!pendingReadQueue.has(fromId)) return;
     
@@ -708,10 +965,12 @@ function enterChat(username) {
     const myAvatar = document.getElementById("myAvatar");
     if (myAvatar) updateAvatar(myAvatar, username);
     
-    initSettingsPanel();
+    initUI();
     
     const savedLang = localStorage.getItem('synapse_lang') || 'en';
     setLanguage(savedLang);
+    
+    switchTab('chats');
 }
 
 // ============================================
@@ -738,8 +997,9 @@ function selectUser(targetId, targetName) {
         chatHeaderPresence.className = `presence-indicator ${sourcePresence.classList.contains('online') ? 'online' : 'offline'}`;
     }
     
-    // ✅ ПОКАЗЫВАЕМ кнопку кода шифрования
+    // Показываем кнопки в шапке чата
     document.getElementById('encryptionBtn').style.display = 'flex';
+    document.getElementById('chatSearchBtn').style.display = 'flex';
     
     document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
     const activeBtn = document.getElementById("user-btn-" + activeTargetId);
@@ -755,7 +1015,10 @@ function selectUser(targetId, targetName) {
 
     getLogDiv().innerHTML = "";
     shownMessages.clear();
-    shownKeyExchanges.clear(); // Сбрасываем для нового чата
+    shownKeyExchanges.clear();
+    
+    // Закрываем поиск в чате
+    closeChatSearch();
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "get_pubkey", to: activeTargetId }));
@@ -876,12 +1139,10 @@ async function loadHistory(target) {
 
                 logMessage(msgIdStr, text, isMe ? "me" : "other", timeStr, status, fromUsername);
                 
-                // ✅ ИСПРАВЛЕНО: используем markAsRead вместо прямой отправки
                 if (!isMe && status !== "read") {
                     markAsRead(msgIdStr, fromIdStr);
                 }
             } else if (!publicKeys[String(m.from)] && !publicKeys[String(m.to)]) {
-                // Если не удалось дешифровать и ключа нет - ждём ключ
                 const fromIdStr = String(m.from);
                 if (fromIdStr !== userId) {
                     markAsRead(msgIdStr, fromIdStr);
@@ -889,12 +1150,10 @@ async function loadHistory(target) {
             }
         }
         
-        // Показываем сообщение об обмене ключами, если ключ уже есть
         if (publicKeys[target]) {
             await showKeyExchangeIfNeeded(target);
         }
         
-        // Обновляем превью
         if (messages.length > 0) {
             const lastMsg = messages[messages.length - 1];
             const decrypted = await decryptMessage(lastMsg, userId);
@@ -916,14 +1175,46 @@ async function loadHistory(target) {
 }
 
 // ============================================
-// ========== WEBSOCKET =======================
+// ========== WEBSOCKET С АВТО-RECONNECT ======
 // ============================================
 
 function initWebSocket() {
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+        return;
+    }
+    
+    if (wsReconnectAttempts === 0) {
+        updateConnectionStatus('connecting');
+    }
+    
     ws = new WebSocket(`ws://localhost:8080/ws?token=${token}`);
-
-    ws.onopen = () => { 
+    
+    ws.onopen = () => {
+        wsReconnectAttempts = 0;
+        updateConnectionStatus('connected');
         ws.send(JSON.stringify({ type: "set_pubkey", pubKey: publicKeyBase64 })); 
+    };
+    
+    ws.onclose = () => {
+        if (!token) return; // Разлогинились - не переподключаемся
+        
+        wsReconnectAttempts++;
+        if (wsReconnectAttempts <= WS_MAX_RECONNECT) {
+            const delay = Math.min(
+                WS_RECONNECT_BASE_DELAY * Math.pow(2, wsReconnectAttempts - 1),
+                WS_RECONNECT_MAX_DELAY
+            );
+            updateConnectionStatus('reconnecting', `${wsReconnectAttempts}/${WS_MAX_RECONNECT}`);
+            wsReconnectTimer = setTimeout(initWebSocket, delay);
+        } else {
+            updateConnectionStatus('disconnected');
+        }
+    };
+    
+    ws.onerror = () => {
+        if (wsReconnectAttempts === 0) {
+            updateConnectionStatus('reconnecting');
+        }
     };
 
     ws.onmessage = async (e) => {
@@ -958,10 +1249,8 @@ function initWebSocket() {
                 true, ["encrypt"]
             );
             
-            // ✅ НОВОЕ: Flush всех накопленных read-статусов
             flushPendingReads(d.from);
             
-            // ✅ НОВОЕ: Показываем сообщение об обмене ключами для активного чата
             if (String(d.from) === activeTargetId) {
                 await showKeyExchangeIfNeeded(d.from);
             }
@@ -986,7 +1275,6 @@ function initWebSocket() {
                 ? localStorage.getItem("username") 
                 : (userCache.get(fromIdStr)?.username || "User");
             
-            // Обновляем превью
             if (!isMe) {
                 const partnerData = userCache.get(fromIdStr);
                 if (partnerData) {
@@ -1033,12 +1321,10 @@ function initWebSocket() {
                     let timeStr = formatTime(d.timestamp || d.created_at || null);
                     logMessage(msgIdStr, text, isMe ? "me" : "other", timeStr, "sent", fromUsername);
                     
-                    // ✅ ИСПРАВЛЕНО: отправляем read через markAsRead
                     if (!isMe) {
                         markAsRead(msgIdStr, fromIdStr);
                     }
                 } else if (!isMe) {
-                    // Если не смогли дешифровать - всё равно пытаемся отметить как прочитанное
                     markAsRead(msgIdStr, fromIdStr);
                 }
             } else {
@@ -1115,17 +1401,34 @@ async function send() {
 // ============================================
 
 function logout() {
-    if (ws) { ws.close(); ws = null; }
-    token = null; 
+    // Останавливаем reconnect
+    if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+    }
+    wsReconnectAttempts = 0;
+    
+    const savedToken = token; // Сохраняем для проверки
+    token = null; // Сначала обнуляем token, чтобы onclose не запускал reconnect
+    
+    if (ws) { 
+        ws.close(); 
+        ws = null; 
+    }
+    
     userId = null; 
     activeTargetId = null;
     activeTargetName = null;
+    currentTab = 'chats';
     
     for (let key in publicKeys) delete publicKeys[key];
     shownMessages.clear();
     userCache.clear();
     shownKeyExchanges.clear();
     pendingReadQueue.clear();
+    pendingMessages && Object.keys(pendingMessages).forEach(k => delete pendingMessages[k]);
+    chatSearchMatches = [];
+    chatSearchActiveIndex = -1;
 
     localStorage.removeItem("token");
     localStorage.removeItem("userId");
@@ -1141,10 +1444,22 @@ function logout() {
     document.getElementById("sendBtn").disabled = true;
     document.getElementById("authPassword").value = ""; 
     getAuthErrorDiv().innerText = "";
+    
+    // Сбрасываем поиск
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    const searchClear = document.getElementById('searchClear');
+    if (searchClear) searchClear.style.display = 'none';
+    filterChats('');
+    closeChatSearch();
 
     document.getElementById("chatScreen").style.display = "none";
     document.getElementById("authScreen").style.display = "block";
     document.getElementById('encryptionBtn').style.display = 'none';
+    document.getElementById('chatSearchBtn').style.display = 'none';
+    
+    // Сбрасываем status bar
+    updateConnectionStatus('connecting');
 }
 
 // ============================================
@@ -1184,6 +1499,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
         } catch (err) {
             console.log("Server unavailable on load");
+            updateConnectionStatus('disconnected');
         }
     }
 });

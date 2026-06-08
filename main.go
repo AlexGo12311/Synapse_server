@@ -55,7 +55,6 @@ func main() {
 	mux.HandleFunc("/ws", server.HandleConnections)
 	mux.Handle("/history", auth.AuthMiddleware(http.HandlerFunc(server.GetHistory)))
 	mux.Handle("/users", auth.AuthMiddleware(http.HandlerFunc(server.GetUsers)))
-	// 🆕 НОВЫЙ РОУТ: последние сообщения для превью
 	mux.Handle("/last-messages", auth.AuthMiddleware(http.HandlerFunc(server.GetLastMessages)))
 
 	log.Println("🚀 Server running on :8080")
