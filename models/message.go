@@ -16,4 +16,5 @@ type Message struct {
 
 	CreatedAt int64  `json:"created_at"`
 	Status    string `json:"status"`
+	ReplyTo   string `json:"reply_to,omitempty"`
 }

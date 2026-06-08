@@ -11,7 +11,6 @@ type Database struct {
 	DB *sql.DB
 }
 
-// New инициализирует подключение к БД и создает таблицы
 func New() *Database {
 	db, err := sql.Open("sqlite", "chat.db")
 	if err != nil {
@@ -35,7 +34,8 @@ func (d *Database) createTables() {
         key_sender TEXT,
         key_receiver TEXT,
         created_at INTEGER,
-        status TEXT DEFAULT 'sent' -- НОВАЯ КОЛОНКА
+        status TEXT DEFAULT 'sent',
+        reply_to TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS users (

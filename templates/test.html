@@ -13,9 +13,6 @@
 
 <body>
 
-<!-- ============================================ -->
-<!-- ============ ЭКРАН АВТОРИЗАЦИИ ============= -->
-<!-- ============================================ -->
 <div id="authScreen">
     <h2>Amini</h2>
     <input id="authUsername" placeholder="Username" autocomplete="username">
@@ -31,12 +28,8 @@
     </div>
 </div>
 
-<!-- ============================================ -->
-<!-- ============ ЭКРАН МЕССЕНДЖЕРА ============= -->
-<!-- ============================================ -->
 <div id="chatScreen">
     
-    <!-- ================== SIDEBAR ================== -->
     <div class="sidebar">
         
         <div class="status-bar status-connecting" id="statusBar">
@@ -153,10 +146,8 @@
         </div>
     </div>
     
-    <!-- ================== CHAT AREA ================== -->
     <div class="chat-area">
         
-        <!-- WELCOME SCREEN (показывается когда чат не выбран) -->
         <div class="welcome-screen" id="welcomeScreen">
             <div class="welcome-icon">💬</div>
             <h2 class="welcome-title">Amini</h2>
@@ -203,6 +194,12 @@
             <div class="chat-header-info">
                 <div class="chat-header-label" data-i18n="chat_with">Chat with</div>
                 <div class="chat-header-name" id="activeChatTarget" data-i18n="select_user">Select a user</div>
+                <div class="typing-indicator" id="typingIndicator" style="display:none;">
+                    <span class="typing-text" data-i18n="typing">typing</span>
+                    <span class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </span>
+                </div>
             </div>
             <div class="chat-header-actions">
                 <button class="icon-btn chat-search-btn" id="chatSearchBtn" title="Search in chat" style="display:none;">🔍</button>
@@ -222,6 +219,17 @@
             </div>
         </div>
         
+        <div class="reply-preview" id="replyPreview" style="display:none;">
+            <div class="reply-preview-content">
+                <div class="reply-preview-accent"></div>
+                <div class="reply-preview-body">
+                    <div class="reply-preview-name" id="replyPreviewName"></div>
+                    <div class="reply-preview-text" id="replyPreviewText"></div>
+                </div>
+            </div>
+            <button class="reply-preview-close" onclick="cancelReply()" title="Cancel">×</button>
+        </div>
+        
         <div class="input-area" id="inputArea" style="display:none;">
             <input id="messageInput" placeholder="Write a message..." onkeydown="if(event.key==='Enter') send()" disabled data-i18n-placeholder="message_placeholder">
             <button id="sendBtn" onclick="send()" disabled>
@@ -232,9 +240,6 @@
     </div>
 </div>
 
-<!-- ============================================ -->
-<!-- ======= МОДАЛКА НОВОГО ЧАТА ================ -->
-<!-- ============================================ -->
 <div class="new-chat-overlay" id="newChatOverlay">
     <div class="new-chat-modal">
         <div class="new-chat-header">
@@ -253,9 +258,6 @@
     </div>
 </div>
 
-<!-- ============================================ -->
-<!-- ========= МОДАЛЬНОЕ ОКНО КОДА ШИФРОВАНИЯ === -->
-<!-- ============================================ -->
 <div class="encryption-overlay" id="encryptionOverlay">
     <div class="encryption-modal">
         <div class="encryption-header">

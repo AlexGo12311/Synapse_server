@@ -38,7 +38,6 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Закрываем сокет и удаляем из хаба при разрыве связи
 	defer func() {
 		s.hub.Mutex.Lock()
 		delete(s.hub.Clients, userID)
@@ -207,6 +206,40 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			s.hub.Mutex.Unlock()
+
+		// ================= TYPING INDICATOR =================
+		case "typing":
+			target, _ := raw["to"].(string)
+			if target == "" {
+				continue
+			}
+
+			s.hub.Mutex.Lock()
+			receiver, isOnline := s.hub.Clients[target]
+			if isOnline {
+				receiver.Conn.WriteJSON(map[string]interface{}{
+					"type": "typing",
+					"from": userID,
+				})
+			}
+			s.hub.Mutex.Unlock()
+
+		case "stop_typing":
+			target, _ := raw["to"].(string)
+			if target == "" {
+				continue
+			}
+
+			s.hub.Mutex.Lock()
+			receiver, isOnline := s.hub.Clients[target]
+			if isOnline {
+				receiver.Conn.WriteJSON(map[string]interface{}{
+					"type": "stop_typing",
+					"from": userID,
+				})
+			}
+			s.hub.Mutex.Unlock()
+
 		}
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"log"
 )
 
-// GetChatID генерирует уникальный ID чата между двумя пользователями
 func GetChatID(a, b string) string {
 	if a < b {
 		return a + ":" + b
@@ -14,9 +13,7 @@ func GetChatID(a, b string) string {
 	return b + ":" + a
 }
 
-// SaveMessage сохраняет сообщение в БД
 func (s *Storage) SaveMessage(msg models.Message) {
-
 	chatID := GetChatID(msg.From, msg.To)
 
 	status := msg.Status
@@ -24,32 +21,18 @@ func (s *Storage) SaveMessage(msg models.Message) {
 		status = "sent"
 	}
 
+	replyTo := msg.ReplyTo
+
 	_, err := s.db.DB.Exec(`
         INSERT INTO messages
         (
-            id,
-            chat_id,
-            sender,
-            receiver,
-            data,
-            iv,
-            key_sender,
-            key_receiver,
-            created_at,
-            status
+            id, chat_id, sender, receiver, data, iv,
+            key_sender, key_receiver, created_at, status, reply_to
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-		msg.ID,
-		chatID,
-		msg.From,
-		msg.To,
-		msg.Data,
-		msg.IV,
-		msg.KeySender,
-		msg.KeyReceiver,
-		msg.CreatedAt,
-		status,
+		msg.ID, chatID, msg.From, msg.To, msg.Data, msg.IV,
+		msg.KeySender, msg.KeyReceiver, msg.CreatedAt, status, replyTo,
 	)
 
 	if err != nil {
@@ -57,20 +40,10 @@ func (s *Storage) SaveMessage(msg models.Message) {
 	}
 }
 
-// GetMessages возвращает историю переписки
 func (s *Storage) GetMessages(chatID string) ([]models.Message, error) {
-
 	rows, err := s.db.DB.Query(`
-        SELECT
-            id,
-            sender,
-            receiver,
-            data,
-            iv,
-            key_sender,
-            key_receiver,
-            created_at,
-            status
+        SELECT id, sender, receiver, data, iv, key_sender, key_receiver,
+               created_at, status, COALESCE(reply_to, '') as reply_to
         FROM messages
         WHERE chat_id = ?
         ORDER BY created_at ASC
@@ -84,20 +57,13 @@ func (s *Storage) GetMessages(chatID string) ([]models.Message, error) {
 	var messages []models.Message
 
 	for rows.Next() {
-
 		var msg models.Message
 		var status sql.NullString
 
 		err := rows.Scan(
-			&msg.ID,
-			&msg.From,
-			&msg.To,
-			&msg.Data,
-			&msg.IV,
-			&msg.KeySender,
-			&msg.KeyReceiver,
-			&msg.CreatedAt,
-			&status,
+			&msg.ID, &msg.From, &msg.To, &msg.Data, &msg.IV,
+			&msg.KeySender, &msg.KeyReceiver, &msg.CreatedAt,
+			&status, &msg.ReplyTo,
 		)
 
 		if err != nil {
@@ -123,12 +89,9 @@ func (s *Storage) GetMessages(chatID string) ([]models.Message, error) {
 	return messages, nil
 }
 
-// UpdateMessageStatus обновляет статус доставки сообщения
 func (s *Storage) UpdateMessageStatus(msgID string, newStatus string) error {
 	_, err := s.db.DB.Exec(`
-        UPDATE messages 
-        SET status = ? 
-        WHERE id = ?
+        UPDATE messages SET status = ? WHERE id = ?
     `, newStatus, msgID)
 
 	if err != nil {
@@ -139,11 +102,6 @@ func (s *Storage) UpdateMessageStatus(msgID string, newStatus string) error {
 	return nil
 }
 
-// ============================================
-// ========= НОВОЕ: ПОСЛЕДНИЕ СООБЩЕНИЯ =======
-// ============================================
-
-// LastMessage — структура для API последних сообщений
 type LastMessage struct {
 	ChatID      string `json:"chat_id"`
 	PartnerID   string `json:"partner_id"`
@@ -156,24 +114,15 @@ type LastMessage struct {
 	KeyReceiver string `json:"key_receiver"`
 	CreatedAt   int64  `json:"created_at"`
 	Status      string `json:"status"`
+	ReplyTo     string `json:"reply_to,omitempty"`
 }
 
-// GetLastMessages возвращает по одному последнему сообщению для каждого чата пользователя.
-// Используется subquery с MAX(created_at) — самый быстрый способ в SQLite.
 func (s *Storage) GetLastMessages(userID string) ([]LastMessage, error) {
-
 	query := `
         SELECT 
-            m.chat_id,
-            m.id,
-            m.sender,
-            m.receiver,
-            m.data,
-            m.iv,
-            m.key_sender,
-            m.key_receiver,
-            m.created_at,
-            m.status
+            m.chat_id, m.id, m.sender, m.receiver, m.data, m.iv,
+            m.key_sender, m.key_receiver, m.created_at, m.status,
+            COALESCE(m.reply_to, '') as reply_to
         FROM messages m
         INNER JOIN (
             SELECT chat_id, MAX(created_at) as max_time
@@ -197,16 +146,9 @@ func (s *Storage) GetLastMessages(userID string) ([]LastMessage, error) {
 		var status sql.NullString
 
 		err := rows.Scan(
-			&msg.ChatID,
-			&msg.ID,
-			&msg.From,
-			&msg.To,
-			&msg.Data,
-			&msg.IV,
-			&msg.KeySender,
-			&msg.KeyReceiver,
-			&msg.CreatedAt,
-			&status,
+			&msg.ChatID, &msg.ID, &msg.From, &msg.To,
+			&msg.Data, &msg.IV, &msg.KeySender, &msg.KeyReceiver,
+			&msg.CreatedAt, &status, &msg.ReplyTo,
 		)
 
 		if err != nil {
@@ -220,7 +162,6 @@ func (s *Storage) GetLastMessages(userID string) ([]LastMessage, error) {
 			msg.Status = "sent"
 		}
 
-		// Определяем партнёра в чате
 		if msg.From == userID {
 			msg.PartnerID = msg.To
 		} else {
