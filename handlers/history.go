@@ -1,20 +1,18 @@
 package handlers
 
 import (
-	"Synapse_server/middlewares"
+	"Synapse_server/auth"
 	"Synapse_server/models"
+	"Synapse_server/storage"
 	"encoding/json"
 	"net/http"
-
-	"Synapse_server/storage"
 )
 
-func GetHistory(w http.ResponseWriter, r *http.Request) {
+func (s *Server) GetHistory(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	// ===== user из middleware =====
-	userIDRaw := r.Context().Value(middlewares.UserContextKey)
+	userIDRaw := r.Context().Value(auth.UserContextKey)
 	userID, ok := userIDRaw.(string)
 
 	if !ok || userID == "" {
@@ -22,18 +20,15 @@ func GetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ===== target =====
 	target := r.URL.Query().Get("to")
 	if target == "" {
 		http.Error(w, "Missing target", http.StatusBadRequest)
 		return
 	}
 
-	// ===== chat =====
 	chatID := storage.GetChatID(userID, target)
 
-	// ===== messages =====
-	messages, err := storage.GetMessages(chatID)
+	messages, err := s.store.GetMessages(chatID)
 	if err != nil {
 		http.Error(w, "DB error", http.StatusInternalServerError)
 		return

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"Synapse_server/auth"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -9,8 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"Synapse_server/models"
-	"Synapse_server/storage"
-	"Synapse_server/utils"
 
 	"github.com/gorilla/websocket"
 )
@@ -19,7 +18,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-func HandleConnections(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 	tokenString := r.URL.Query().Get("token")
 	if tokenString == "" {
@@ -27,7 +26,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := utils.ParseToken(tokenString)
+	userID, err := auth.ParseToken(tokenString)
 	if err != nil {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
@@ -39,13 +38,12 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Оборачиваем закрытие в defer, чтобы 100% разослать статус offline при любом обрыве связи
+	// Закрываем сокет и удаляем из хаба при разрыве связи
 	defer func() {
-		storage.ClientsMutex.Lock()
-		delete(storage.Clients, userID)
+		s.hub.Mutex.Lock()
+		delete(s.hub.Clients, userID)
 
-		// Рассылаем всем остальным, что пользователь вышел
-		for id, c := range storage.Clients {
+		for id, c := range s.hub.Clients {
 			if id != userID {
 				c.Conn.WriteJSON(map[string]interface{}{
 					"type":   "presence",
@@ -54,7 +52,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
-		storage.ClientsMutex.Unlock()
+		s.hub.Mutex.Unlock()
 
 		ws.Close()
 		log.Println("User disconnected:", userID)
@@ -65,29 +63,26 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		Conn: ws,
 	}
 
-	storage.ClientsMutex.Lock()
-	storage.Clients[userID] = &client
+	s.hub.Mutex.Lock()
+	s.hub.Clients[userID] = &client
 
-	// 1. Собираем список тех, кто уже онлайн, чтобы отправить новичку
 	var onlineUsers []string
-	for id := range storage.Clients {
+	for id := range s.hub.Clients {
 		if id != userID {
 			onlineUsers = append(onlineUsers, id)
 		}
 	}
-	storage.ClientsMutex.Unlock()
+	s.hub.Mutex.Unlock()
 
 	log.Println("User connected:", userID)
 
-	// 2. Отправляем подключившемуся юзеру список онлайна
 	ws.WriteJSON(map[string]interface{}{
 		"type":  "online_list",
 		"users": onlineUsers,
 	})
 
-	// 3. Сообщаем всем остальным, что этот юзер зашел
-	storage.ClientsMutex.Lock()
-	for id, c := range storage.Clients {
+	s.hub.Mutex.Lock()
+	for id, c := range s.hub.Clients {
 		if id != userID {
 			c.Conn.WriteJSON(map[string]interface{}{
 				"type":   "presence",
@@ -96,7 +91,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	storage.ClientsMutex.Unlock()
+	s.hub.Mutex.Unlock()
 
 	for {
 		var raw map[string]interface{}
@@ -110,17 +105,14 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 		switch msgType {
 
-		// ================= PUBKEY =================
 		case "set_pubkey":
-
 			pubKey, _ := raw["pubKey"].(string)
 
-			storage.SavePubKey(userID, pubKey)
+			s.store.SavePubKey(userID, pubKey)
 			log.Println("Saved pubkey for", userID)
 
-			// рассылаем всем
-			storage.ClientsMutex.Lock()
-			for id, c := range storage.Clients {
+			s.hub.Mutex.Lock()
+			for id, c := range s.hub.Clients {
 				if id != userID {
 					c.Conn.WriteJSON(map[string]interface{}{
 						"type":   "pubkey",
@@ -129,13 +121,11 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 					})
 				}
 			}
-			storage.ClientsMutex.Unlock()
+			s.hub.Mutex.Unlock()
 
 		case "get_pubkey":
-
 			target, _ := raw["to"].(string)
-
-			key, _ := storage.GetPubKey(target)
+			key, _ := s.store.GetPubKey(target)
 
 			if key != "" {
 				ws.WriteJSON(map[string]interface{}{
@@ -145,11 +135,8 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 
-		// ================= MESSAGE =================
 		case "message":
-
 			var msg models.Message
-
 			bytes, _ := json.Marshal(raw)
 
 			if err := json.Unmarshal(bytes, &msg); err != nil {
@@ -159,84 +146,67 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 			msg.From = userID
 
-			// Если клиент уже прислал ID — сохраняем его
 			if msg.ID == "" {
 				msg.ID = uuid.New().String()
 			}
 
-			// Если клиент не прислал время
 			if msg.CreatedAt == 0 {
 				msg.CreatedAt = time.Now().Unix()
 			}
 
-			// 1. Сохраняем сообщение в БД (по умолчанию оно получает статус 'sent')
-			storage.SaveMessage(msg)
+			s.store.SaveMessage(msg)
 
-			// 2. Подтверждаем отправителю, что сервер всё записал (ЭТО ТОЛЬКО 1 ГАЛОЧКА!)
 			ws.WriteJSON(map[string]interface{}{
 				"type": "message_saved",
 				"id":   msg.ID,
 			})
 
-			// 3. Проверяем, в сети ли получатель
-			storage.ClientsMutex.Lock()
-			receiver, ok := storage.Clients[msg.To]
+			s.hub.Mutex.Lock()
+			receiver, ok := s.hub.Clients[msg.To]
 
 			if ok {
 				log.Println("Forwarding message", msg.ID, "from", userID, "to", msg.To)
 
-				// Пытаемся отправить сообщение
 				if err := receiver.Conn.WriteJSON(msg); err == nil {
-					// УСПЕХ! Получатель онлайн и сообщение ушло в его сокет.
+					s.store.UpdateMessageStatus(msg.ID, "delivered")
 
-					// Обновляем статус в БД на "доставлено"
-					storage.UpdateMessageStatus(msg.ID, "delivered")
-
-					// Сразу сообщаем отправителю, что сообщение доставлено (2 серые галочки)
 					ws.WriteJSON(map[string]interface{}{
 						"type":   "status_update",
 						"id":     msg.ID,
 						"status": "delivered",
-						"from":   msg.To, // от кого пришел статус
+						"from":   msg.To,
 					})
 				} else {
 					log.Println("Forward error:", err)
 				}
 			}
-			// Если !ok (оффлайн), мы ничего не делаем. Сообщение останется в БД со статусом 'sent'.
-			storage.ClientsMutex.Unlock()
+			s.hub.Mutex.Unlock()
 
-		// ================= СТАТУСЫ ДОСТАВКИ =================
 		case "status_update":
 			target, _ := raw["to"].(string)
 			msgID, okID := raw["id"].(string)
 			status, okStatus := raw["status"].(string)
 
-			// 1. Сохраняем новый статус в базу данных
-			// (Убрали условие status != "read_all", теперь любой статус корректно пишется в БД)
 			if okID && okStatus {
-				err := storage.UpdateMessageStatus(msgID, status)
+				err := s.store.UpdateMessageStatus(msgID, status)
 				if err != nil {
 					log.Printf("Failed to update status for msg %s: %v", msgID, err)
 				}
 			}
 
-			// 2. Пересылаем статус получателю (если он онлайн), чтобы у него покрасились галочки
-			storage.ClientsMutex.Lock()
-			receiver, isOnline := storage.Clients[target]
+			s.hub.Mutex.Lock()
+			receiver, isOnline := s.hub.Clients[target]
 
 			if isOnline {
 				log.Println("Forwarding status", status, "from", userID, "to", target)
 
-				// Добавляем поле from, чтобы фронтенд знал, в каком чате менять статус
 				raw["from"] = userID
 
 				if err := receiver.Conn.WriteJSON(raw); err != nil {
 					log.Println("Status forward error:", err)
 				}
 			}
-			storage.ClientsMutex.Unlock()
-
+			s.hub.Mutex.Unlock()
 		}
 	}
 }

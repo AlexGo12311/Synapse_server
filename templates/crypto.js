@@ -125,3 +125,68 @@ async function decryptMessage(msg, currentUserId) {
         return null;
     }
 }
+
+// ============================================
+// ======= НОВОЕ: FINGERPRINT КЛЮЧА ===========
+// ============================================
+
+/**
+ * Генерирует отпечаток (fingerprint) публичного ключа.
+ * Формат как в Telegram/Signal: группы по 5 символов через пробел.
+ * Возвращает { short: "12345 67890...", full: "12345 67890 12345 ..." }
+ */
+async function generateKeyFingerprint(pubKeyBase64) {
+    if (!pubKeyBase64) return { short: "—", full: "—" };
+    
+    try {
+        const keyData = fromB64(pubKeyBase64);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        
+        // Берём первые 20 байт = 40 hex символов
+        const hexString = hashArray.slice(0, 20)
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('')
+            .toUpperCase();
+        
+        // Разбиваем на группы по 5 символов
+        const groups = [];
+        for (let i = 0; i < hexString.length; i += 5) {
+            groups.push(hexString.slice(i, i + 5));
+        }
+        
+        return {
+            short: groups.slice(0, 4).join(' '), // Первые 4 группы для превью
+            full: groups.join(' '),               // Полный fingerprint
+            raw: hexString
+        };
+    } catch (e) {
+        console.error("Fingerprint error:", e);
+        return { short: "—", full: "—", raw: "" };
+    }
+}
+
+/**
+ * Возвращает мой собственный fingerprint
+ */
+async function getMyFingerprint() {
+    return await generateKeyFingerprint(publicKeyBase64);
+}
+
+/**
+ * Возвращает fingerprint собеседника
+ */
+async function getPeerFingerprint(peerId) {
+    const peerKey = publicKeys[peerId];
+    if (!peerKey) return null;
+    
+    // Экспортируем ключ обратно в SPKI для хэширования
+    try {
+        const spkiBuffer = await crypto.subtle.exportKey("spki", peerKey);
+        const pubKeyB64 = toB64(spkiBuffer);
+        return await generateKeyFingerprint(pubKeyB64);
+    } catch (e) {
+        console.error("Peer fingerprint error:", e);
+        return null;
+    }
+}

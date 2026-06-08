@@ -5,5 +5,13 @@ import (
 	"sync"
 )
 
-var Clients = make(map[string]*models.Client)
-var ClientsMutex = sync.Mutex{}
+type ClientsHub struct {
+	Clients map[string]*models.Client
+	Mutex   sync.Mutex
+}
+
+func NewClientsHub() *ClientsHub {
+	return &ClientsHub{
+		Clients: make(map[string]*models.Client),
+	}
+}

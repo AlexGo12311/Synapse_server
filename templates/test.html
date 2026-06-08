@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Synapse Secure Chat</title>
+    <title>Amini — Secure Chat</title>
     
     <link rel="stylesheet" href="style.css">
     
@@ -13,34 +13,285 @@
 
 <body>
 
+<!-- ============================================ -->
+<!-- ============ ЭКРАН АВТОРИЗАЦИИ ============= -->
+<!-- ============================================ -->
 <div id="authScreen">
-    <h2>Synapse</h2>
-    <input id="authUsername" placeholder="Username">
-    <input id="authPassword" type="password" placeholder="Password">
+    <h2>Amini</h2>
+    <input id="authUsername" placeholder="Username" autocomplete="username">
+    <input id="authPassword" type="password" placeholder="Password" autocomplete="current-password">
     <div id="authError"></div>
     <div class="auth-buttons">
-        <button class="btn-login" onclick="login()">Login</button>
-        <button class="btn-register" onclick="register()">Register</button>
+        <button class="btn-login" onclick="login()" data-i18n="login">Login</button>
+        <button class="btn-register" onclick="register()" data-i18n="register">Register</button>
+    </div>
+    <div class="auth-lang-switcher">
+        <button class="lang-btn active" onclick="setLanguage('en')">EN</button>
+        <button class="lang-btn" onclick="setLanguage('ru')">RU</button>
     </div>
 </div>
 
+<!-- ============================================ -->
+<!-- ============ ЭКРАН МЕССЕНДЖЕРА ============= -->
+<!-- ============================================ -->
 <div id="chatScreen">
+    
+    <!-- ================== SIDEBAR ================== -->
     <div class="sidebar">
-        <div class="sidebar-header">
-            <div class="user-info">
-                👤 <span id="myUsernameDisplay" style="font-weight: normal;"></span>
-            </div>
-            <button class="btn-logout" onclick="logout()">Logout</button>
+        
+        <div class="status-bar status-connecting" id="statusBar">
+            <span class="status-dot"></span>
+            <span class="status-text" data-i18n="connecting">Connecting...</span>
         </div>
-        <div id="usersList"></div>
+        
+        <div class="sidebar-user-header">
+            <div class="avatar-wrapper">
+                <div class="avatar small" id="myAvatar"></div>
+                <span class="presence-indicator online"></span>
+            </div>
+            <span class="my-username" id="myUsernameDisplay"></span>
+            <button class="new-chat-btn" id="newChatBtn" onclick="openNewChatModal()" title="New chat">
+                <span>+</span>
+            </button>
+        </div>
+        
+        <div class="search-container" id="searchContainer">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" placeholder="Search chats..." data-i18n-placeholder="search_chats">
+            <button class="search-clear" id="searchClear" style="display:none;">×</button>
+        </div>
+        
+        <div class="sidebar-content">
+            
+            <div class="tab-pane active" id="tab-chats">
+                <div id="usersList"></div>
+                <div class="no-chats-state" id="noChatsState" style="display:none;">
+                    <div class="empty-icon">💬</div>
+                    <div class="empty-title" data-i18n="no_chats_title">No conversations yet</div>
+                    <div class="empty-subtitle" data-i18n="no_chats_subtitle">Tap + to start a new chat</div>
+                </div>
+                <div class="search-empty" id="searchEmptyState" style="display:none;">
+                    <div class="empty-icon">🔍</div>
+                    <div class="empty-text" data-i18n="no_results">No chats found</div>
+                </div>
+            </div>
+            
+            <div class="tab-pane" id="tab-keys">
+                <div class="keys-screen">
+                    <div class="keys-icon">🔐</div>
+                    <h3 class="keys-title" data-i18n="your_key_title">Your Encryption Key</h3>
+                    <p class="keys-description" data-i18n="your_key_description">
+                        Share this code with contacts so they can verify your identity.
+                    </p>
+                    <div class="keys-fingerprint-container">
+                        <div class="keys-fingerprint" id="myFingerprint">Loading...</div>
+                    </div>
+                    <button class="keys-copy-btn" onclick="copyMyFingerprint()" data-i18n="copy_key">
+                        📋 Copy My Code
+                    </button>
+                    <div class="keys-warning">
+                        <div class="warning-icon">⚠️</div>
+                        <div class="warning-text" data-i18n="keys_warning">
+                            If your code changes unexpectedly, it may indicate a security issue.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-pane" id="tab-settings">
+                <div class="settings-inline">
+                    <div class="settings-section">
+                        <h4 data-i18n="language">🌐 Language</h4>
+                        <div class="language-selector">
+                            <button class="lang-option" data-lang="en" onclick="setLanguage('en')">🇬🇧 English</button>
+                            <button class="lang-option" data-lang="ru" onclick="setLanguage('ru')">🇷🇺 Русский</button>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h4 data-i18n="appearance">🌓 Appearance</h4>
+                        <div class="theme-mode-toggle">
+                            <button class="mode-btn active" data-mode="light" onclick="setThemeMode('light')">
+                                <span>☀️</span>
+                                <span data-i18n="light_mode">Light</span>
+                            </button>
+                            <button class="mode-btn" data-mode="dark" onclick="setThemeMode('dark')">
+                                <span>🌙</span>
+                                <span data-i18n="dark_mode">Dark</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h4 data-i18n="color_theme">🎨 Color Theme</h4>
+                        <div class="themes-grid" id="themesGrid"></div>
+                    </div>
+                    <div class="settings-section logout-section">
+                        <button class="logout-btn" onclick="logout()">
+                            <span>🚪</span>
+                            <span data-i18n="logout">Log Out</span>
+                        </button>
+                    </div>
+                    <div class="settings-version">
+                        Amini v1.0 · End-to-End Encrypted
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tabbar">
+            <button class="tab-btn active" data-tab="chats" onclick="switchTab('chats')">
+                <span class="tab-icon">💬</span>
+                <span class="tab-label" data-i18n="chats_tab">Chats</span>
+            </button>
+            <button class="tab-btn" data-tab="keys" onclick="switchTab('keys')">
+                <span class="tab-icon">🔒</span>
+                <span class="tab-label" data-i18n="keys_tab">Keys</span>
+            </button>
+            <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">
+                <span class="tab-icon">⚙️</span>
+                <span class="tab-label" data-i18n="settings_tab">Settings</span>
+            </button>
+        </div>
     </div>
     
+    <!-- ================== CHAT AREA ================== -->
     <div class="chat-area">
-        <div class="chat-header">Chatting with: <span id="activeChatTarget" style="color: #007bff;">Select a user</span></div>
-        <div id="log"></div>
-        <div class="input-area">
-            <input id="messageInput" placeholder="Write a message..." onkeydown="if(event.key==='Enter') send()" disabled>
-            <button id="sendBtn" onclick="send()" disabled>Send</button>
+        
+        <!-- WELCOME SCREEN (показывается когда чат не выбран) -->
+        <div class="welcome-screen" id="welcomeScreen">
+            <div class="welcome-icon">💬</div>
+            <h2 class="welcome-title">Amini</h2>
+            <p class="welcome-subtitle" data-i18n="welcome_subtitle">
+                Secure end-to-end encrypted messenger
+            </p>
+            
+            <div class="welcome-actions">
+                <button class="welcome-action-btn" onclick="openThemeSettings()">
+                    <span class="welcome-action-icon">🎨</span>
+                    <div class="welcome-action-text">
+                        <div class="welcome-action-title" data-i18n="welcome_theme">Customize Appearance</div>
+                        <div class="welcome-action-desc" data-i18n="welcome_theme_desc">Themes, colors, dark mode</div>
+                    </div>
+                </button>
+                
+                <button class="welcome-action-btn" onclick="openLanguageSettings()">
+                    <span class="welcome-action-icon">🌐</span>
+                    <div class="welcome-action-text">
+                        <div class="welcome-action-title" data-i18n="welcome_lang">Language</div>
+                        <div class="welcome-action-desc" data-i18n="welcome_lang_desc">English, Русский</div>
+                    </div>
+                </button>
+                
+                <button class="welcome-action-btn" onclick="switchTab('keys')">
+                    <span class="welcome-action-icon">🔐</span>
+                    <div class="welcome-action-text">
+                        <div class="welcome-action-title" data-i18n="welcome_keys">Your Encryption Key</div>
+                        <div class="welcome-action-desc" data-i18n="welcome_keys_desc">Verify your identity</div>
+                    </div>
+                </button>
+            </div>
+            
+            <div class="welcome-hint" data-i18n="welcome_hint">
+                Select a conversation or tap + to start a new one
+            </div>
+        </div>
+        
+        <div class="chat-header" id="chatHeader" style="display:none;">
+            <div class="avatar-wrapper" id="chatHeaderAvatarWrapper">
+                <div class="avatar large" id="chatHeaderAvatar"></div>
+                <span class="presence-indicator offline" id="chatHeaderPresence"></span>
+            </div>
+            <div class="chat-header-info">
+                <div class="chat-header-label" data-i18n="chat_with">Chat with</div>
+                <div class="chat-header-name" id="activeChatTarget" data-i18n="select_user">Select a user</div>
+            </div>
+            <div class="chat-header-actions">
+                <button class="icon-btn chat-search-btn" id="chatSearchBtn" title="Search in chat" style="display:none;">🔍</button>
+                <button class="icon-btn encryption-btn" id="encryptionBtn" title="Encryption code" style="display:none;">🔐</button>
+            </div>
+        </div>
+        
+        <div id="log" style="display:none;"></div>
+        
+        <div class="chat-search-panel" id="chatSearchPanel" style="display:none;">
+            <input type="text" id="chatSearchInput" placeholder="Search in conversation..." data-i18n-placeholder="search_messages">
+            <div class="chat-search-controls">
+                <span class="chat-search-counter" id="chatSearchCounter">0/0</span>
+                <button class="chat-search-nav" onclick="chatSearchPrev()">▲</button>
+                <button class="chat-search-nav" onclick="chatSearchNext()">▼</button>
+                <button class="chat-search-close" onclick="closeChatSearch()">×</button>
+            </div>
+        </div>
+        
+        <div class="input-area" id="inputArea" style="display:none;">
+            <input id="messageInput" placeholder="Write a message..." onkeydown="if(event.key==='Enter') send()" disabled data-i18n-placeholder="message_placeholder">
+            <button id="sendBtn" onclick="send()" disabled>
+                <span data-i18n="send">Send</span>
+                <span>➤</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ======= МОДАЛКА НОВОГО ЧАТА ================ -->
+<!-- ============================================ -->
+<div class="new-chat-overlay" id="newChatOverlay">
+    <div class="new-chat-modal">
+        <div class="new-chat-header">
+            <h3>✏️ <span data-i18n="new_chat">New Conversation</span></h3>
+            <button class="settings-close" onclick="closeNewChatModal()">×</button>
+        </div>
+        <div class="new-chat-search">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="newChatSearchInput" placeholder="Search users..." data-i18n-placeholder="search_users">
+        </div>
+        <div class="new-chat-list" id="newChatList"></div>
+        <div class="new-chat-empty" id="newChatEmpty" style="display:none;">
+            <div class="empty-icon">👤</div>
+            <div class="empty-text" data-i18n="no_users">No users found</div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ========= МОДАЛЬНОЕ ОКНО КОДА ШИФРОВАНИЯ === -->
+<!-- ============================================ -->
+<div class="encryption-overlay" id="encryptionOverlay">
+    <div class="encryption-modal">
+        <div class="encryption-header">
+            <h3>🔐 <span data-i18n="encryption_code">Encryption Code</span></h3>
+            <button class="settings-close" onclick="closeEncryptionModal()">×</button>
+        </div>
+        <div class="encryption-body">
+            <p class="encryption-info" data-i18n="encryption_info">
+                Compare this code with your contact to verify encryption security:
+            </p>
+            <div class="encryption-section">
+                <div class="encryption-label">
+                    <span data-i18n="shared_code">Shared Code</span>
+                    <span class="encryption-shared-icon">🔗</span>
+                </div>
+                <div class="encryption-code" id="sharedCode">—</div>
+            </div>
+            <div class="encryption-section">
+                <div class="encryption-label">
+                    <span data-i18n="your_key">Your Key</span>
+                    <span class="encryption-you-badge" data-i18n="you">You</span>
+                </div>
+                <div class="encryption-code" id="myCode">—</div>
+            </div>
+            <div class="encryption-section">
+                <div class="encryption-label">
+                    <span id="peerNameLabel" data-i18n="peer_key">Peer's Key</span>
+                </div>
+                <div class="encryption-code" id="peerCode">—</div>
+            </div>
+            <button class="btn-copy" onclick="copyEncryptionCode()" data-i18n="copy_code">
+                📋 Copy Code
+            </button>
+            <p class="encryption-warning" data-i18n="encryption_warning">
+                If this code changes, it may mean your contact reinstalled the app or someone is trying to intercept your conversation.
+            </p>
         </div>
     </div>
 </div>
