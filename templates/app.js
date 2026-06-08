@@ -13,7 +13,7 @@ let userId = null;
 let ws = null;
 let activeTargetId = null;
 let activeTargetName = null;
-let currentTab = 'chats'; // chats | keys | settings
+let currentTab = 'chats';
 
 const shownMessages = new Set();
 const publicKeys = {};
@@ -22,16 +22,16 @@ const userCache = new Map();
 const pendingReadQueue = new Map();
 const shownKeyExchanges = new Set();
 
-// ===== WebSocket reconnect =====
 let wsReconnectTimer = null;
 let wsReconnectAttempts = 0;
 const WS_MAX_RECONNECT = 10;
 const WS_RECONNECT_BASE_DELAY = 1000;
 const WS_RECONNECT_MAX_DELAY = 30000;
 
-// ===== Chat search =====
 let chatSearchMatches = [];
 let chatSearchActiveIndex = -1;
+
+let allUsersList = [];
 
 // ============================================
 // ============ ЛОКАЛИЗАЦИЯ ==================
@@ -69,7 +69,6 @@ const I18N = {
         encryption_warning: "If this code changes, it may mean your contact reinstalled the app or someone is trying to intercept your conversation.",
         key_exchange: "🔐 Encryption established",
         need_peer_key: "Waiting for peer's key...",
-        // НОВОЕ:
         search_chats: "Search chats...",
         search_messages: "Search in conversation...",
         no_results: "No chats found",
@@ -84,7 +83,14 @@ const I18N = {
         connected: "Connected",
         connecting: "Connecting...",
         reconnecting: "Reconnecting",
-        disconnected: "Connection lost"
+        disconnected: "Connection lost",
+        new_chat: "New Conversation",
+        search_users: "Search users...",
+        no_users: "No users found",
+        no_chats_title: "No conversations yet",
+        no_chats_subtitle: "Tap + to start a new chat",
+        continue_chat: "Continue chat",
+        start_chat: "Start new chat"
     },
     ru: {
         login: "Войти",
@@ -117,7 +123,6 @@ const I18N = {
         encryption_warning: "Если этот код изменился — возможно, собеседник переустановил приложение или кто-то пытается перехватить переписку.",
         key_exchange: "🔐 Шифрование установлено",
         need_peer_key: "Ожидание ключа собеседника...",
-        // НОВОЕ:
         search_chats: "Поиск чатов...",
         search_messages: "Поиск в переписке...",
         no_results: "Чаты не найдены",
@@ -132,7 +137,14 @@ const I18N = {
         connected: "Подключено",
         connecting: "Подключение...",
         reconnecting: "Переподключение",
-        disconnected: "Соединение потеряно"
+        disconnected: "Соединение потеряно",
+        new_chat: "Новый диалог",
+        search_users: "Поиск пользователей...",
+        no_users: "Пользователи не найдены",
+        no_chats_title: "Пока нет диалогов",
+        no_chats_subtitle: "Нажмите + чтобы начать новый чат",
+        continue_chat: "Продолжить диалог",
+        start_chat: "Начать новый чат"
     }
 };
 
@@ -169,20 +181,14 @@ function setLanguage(lang) {
         btn.classList.toggle('active', btn.dataset.lang === lang);
     });
     
-    // Обновляем статус подключения с новым языком
     const statusBar = document.getElementById('statusBar');
     if (statusBar) {
         const currentStatus = statusBar.className.match(/status-(\w+)/)?.[1] || 'connecting';
         updateConnectionStatus(currentStatus);
     }
     
-    refreshAllPreviews();
-}
-
-function refreshAllPreviews() {
-    userCache.forEach((data, uid) => {
-        if (data.lastMessage) updateUserPreview(uid);
-    });
+    renderChatsList();
+    renderNewChatList(document.getElementById('newChatSearchInput')?.value || '');
 }
 
 // ============================================
@@ -265,7 +271,7 @@ function formatTime(timeInput) {
 }
 
 // ============================================
-// ============ STATUS BAR (ПОДКЛЮЧЕНИЕ) =======
+// ============ STATUS BAR ====================
 // ============================================
 
 function updateConnectionStatus(status, details = '') {
@@ -273,7 +279,6 @@ function updateConnectionStatus(status, details = '') {
     if (!bar) return;
     
     const text = bar.querySelector('.status-text');
-    
     bar.className = 'status-bar status-' + status;
     
     const messages = {
@@ -293,23 +298,19 @@ function updateConnectionStatus(status, details = '') {
 function switchTab(tabName) {
     currentTab = tabName;
     
-    // Обновляем кнопки tabbar
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tabName);
     });
     
-    // Переключаем tab panes
     document.querySelectorAll('.tab-pane').forEach(pane => {
         pane.classList.toggle('active', pane.id === 'tab-' + tabName);
     });
     
-    // Показываем/скрываем поиск (только во вкладке chats)
     const searchContainer = document.getElementById('searchContainer');
     if (searchContainer) {
         searchContainer.classList.toggle('hidden', tabName !== 'chats');
     }
     
-    // Если открыли Keys — загружаем fingerprint
     if (tabName === 'keys') {
         updateMyFingerprintDisplay();
     }
@@ -372,19 +373,20 @@ function initChatListSearch() {
 }
 
 function filterChats(query) {
+    renderChatsList();
+    
     const items = document.querySelectorAll('.user-item');
     const emptyState = document.getElementById('searchEmptyState');
+    const noChatsState = document.getElementById('noChatsState');
     let visibleCount = 0;
     
     items.forEach(item => {
-        const username = (item.dataset.username || '').toLowerCase();
-        const matches = !query || username.includes(query.toLowerCase());
-        item.style.display = matches ? 'flex' : 'none';
-        if (matches) visibleCount++;
+        if (item.style.display !== 'none') visibleCount++;
     });
     
     if (emptyState) {
-        emptyState.style.display = (query && visibleCount === 0) ? 'flex' : 'none';
+        const hasChats = noChatsState && noChatsState.style.display === 'none';
+        emptyState.style.display = (query && visibleCount === 0 && hasChats) ? 'flex' : 'none';
     }
 }
 
@@ -404,7 +406,6 @@ function openChatSearch() {
     chatSearchActiveIndex = -1;
     updateChatSearchCounter();
     
-    // Навешиваем обработчик один раз
     if (!input.hasAttribute('data-listener-attached')) {
         input.addEventListener('input', onChatSearchInput);
         input.addEventListener('keydown', (e) => {
@@ -429,7 +430,6 @@ function closeChatSearch() {
     if (input) input.value = '';
     if (logDiv) logDiv.classList.remove('chat-searching');
     
-    // Убираем все подсветки
     document.querySelectorAll('.message-row.search-hit, .message-row.search-hit-active').forEach(row => {
         row.classList.remove('search-hit', 'search-hit-active');
     });
@@ -444,7 +444,6 @@ function onChatSearchInput(e) {
     
     if (!logDiv) return;
     
-    // Убираем старые классы
     document.querySelectorAll('.message-row.search-hit, .message-row.search-hit-active').forEach(row => {
         row.classList.remove('search-hit', 'search-hit-active');
     });
@@ -784,48 +783,305 @@ function renderThemesGrid() {
 // ============================================
 
 function initUI() {
-    // Поиск по чатам
     initChatListSearch();
     
-    // Кнопка поиска в чате
     document.getElementById('chatSearchBtn')?.addEventListener('click', openChatSearch);
-    
-    // Кнопка кода шифрования
     document.getElementById('encryptionBtn')?.addEventListener('click', openEncryptionModal);
     
-    // Закрытие модального окна шифрования
     document.getElementById('encryptionOverlay')?.addEventListener('click', (e) => {
         if (e.target.id === 'encryptionOverlay') closeEncryptionModal();
     });
+    
+    document.getElementById('newChatOverlay')?.addEventListener('click', (e) => {
+        if (e.target.id === 'newChatOverlay') closeNewChatModal();
+    });
+    
+    const newChatSearchInput = document.getElementById('newChatSearchInput');
+    if (newChatSearchInput) {
+        newChatSearchInput.addEventListener('input', (e) => {
+            renderNewChatList(e.target.value);
+        });
+    }
     
     renderThemesGrid();
     loadSavedTheme();
 }
 
 // ============================================
-// ========== ПРЕВЬЮ СООБЩЕНИЙ ===============
+// ========= 🆕 МОДАЛКА НОВОГО ЧАТА ===========
 // ============================================
 
-function updateUserPreview(uid) {
-    const btn = document.getElementById("user-btn-" + uid);
-    if (!btn) return;
+function openNewChatModal() {
+    const overlay = document.getElementById('newChatOverlay');
+    if (!overlay) return;
     
+    overlay.classList.add('open');
+    
+    setTimeout(() => {
+        const input = document.getElementById('newChatSearchInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+    }, 100);
+    
+    renderNewChatList('');
+}
+
+function closeNewChatModal() {
+    const overlay = document.getElementById('newChatOverlay');
+    if (overlay) overlay.classList.remove('open');
+}
+
+function renderNewChatList(query) {
+    const list = document.getElementById('newChatList');
+    const emptyState = document.getElementById('newChatEmpty');
+    if (!list) return;
+    
+    list.innerHTML = '';
+    
+    const q = (query || '').toLowerCase().trim();
+    const filtered = allUsersList.filter(u => {
+        if (String(u.id) === userId) return false;
+        if (!q) return true;
+        return u.username.toLowerCase().includes(q);
+    });
+    
+    if (filtered.length === 0) {
+        if (emptyState) emptyState.style.display = 'flex';
+        return;
+    }
+    
+    if (emptyState) emptyState.style.display = 'none';
+    
+    filtered.sort((a, b) => {
+        const aData = userCache.get(String(a.id));
+        const bData = userCache.get(String(b.id));
+        const aHasChat = aData && aData.lastMessage !== null;
+        const bHasChat = bData && bData.lastMessage !== null;
+        
+        if (aHasChat && !bHasChat) return -1;
+        if (!aHasChat && bHasChat) return 1;
+        return a.username.localeCompare(b.username);
+    });
+    
+    filtered.forEach(u => {
+        const uIdStr = String(u.id);
+        const data = userCache.get(uIdStr);
+        const hasChat = data && data.lastMessage !== null;
+        
+        const item = document.createElement('button');
+        item.className = 'new-chat-item';
+        
+        const avatarWrapper = document.createElement('div');
+        avatarWrapper.className = 'avatar-wrapper';
+        const avatar = createAvatarElement(u.username);
+        avatarWrapper.appendChild(avatar);
+        
+        const presence = document.createElement('span');
+        presence.className = 'presence-indicator offline';
+        const existingPresence = document.getElementById(`presence-${uIdStr}`);
+        if (existingPresence && existingPresence.classList.contains('online')) {
+            presence.className = 'presence-indicator online';
+        }
+        avatarWrapper.appendChild(presence);
+        
+        const info = document.createElement('div');
+        info.className = 'new-chat-item-info';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'new-chat-item-name';
+        nameSpan.textContent = u.username;
+        info.appendChild(nameSpan);
+        
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'new-chat-item-status' + (hasChat ? ' has-chat' : '');
+        statusSpan.textContent = hasChat ? `💬 ${t('continue_chat')}` : `✨ ${t('start_chat')}`;
+        info.appendChild(statusSpan);
+        
+        item.appendChild(avatarWrapper);
+        item.appendChild(info);
+        
+        item.onclick = () => {
+            startChatWith(uIdStr, u.username);
+            closeNewChatModal();
+        };
+        
+        list.appendChild(item);
+    });
+}
+
+function startChatWith(targetId, targetName) {
+    if (!userCache.has(targetId)) {
+        userCache.set(targetId, {
+            username: targetName,
+            lastMessage: null,
+            lastMessageText: null,
+            lastTime: null,
+            lastFromMe: false,
+            unreadCount: 0
+        });
+    }
+    
+    renderChatsList();
+    selectUser(targetId, targetName);
+    
+    if (currentTab !== 'chats') {
+        switchTab('chats');
+    }
+}
+
+// ============================================
+// ======= 🆕 РЕНДЕР СПИСКА АКТИВНЫХ ЧАТОВ ====
+// ============================================
+
+function renderChatsList() {
+    const listContainer = document.getElementById("usersList");
+    const noChatsState = document.getElementById("noChatsState");
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = "";
+    
+    const activeChats = [];
+    userCache.forEach((data, uid) => {
+        if (data.lastMessage !== null) {
+            activeChats.push({ uid, ...data });
+        }
+    });
+    
+    activeChats.sort((a, b) => (b.lastTime || 0) - (a.lastTime || 0));
+    
+    if (noChatsState) {
+        noChatsState.style.display = activeChats.length === 0 ? 'flex' : 'none';
+    }
+    
+    const searchInput = document.getElementById('searchInput');
+    const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    
+    activeChats.forEach(chat => {
+        if (searchQuery && !chat.username.toLowerCase().includes(searchQuery)) {
+            return;
+        }
+        
+        const btn = document.createElement("button");
+        btn.className = "user-item";
+        btn.id = "user-btn-" + chat.uid;
+        btn.dataset.username = chat.username;
+        btn.dataset.userid = chat.uid;
+        
+        const avatarWrapper = document.createElement("div");
+        avatarWrapper.className = "avatar-wrapper";
+        const avatar = createAvatarElement(chat.username);
+        avatarWrapper.appendChild(avatar);
+        
+        const presenceIndicator = document.createElement("span");
+        presenceIndicator.className = "presence-indicator offline";
+        presenceIndicator.id = `presence-${chat.uid}`;
+        avatarWrapper.appendChild(presenceIndicator);
+        
+        const content = document.createElement("div");
+        content.className = "user-item-content";
+        
+        const top = document.createElement("div");
+        top.className = "user-item-top";
+        
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "user-item-name";
+        nameSpan.textContent = chat.username;
+        top.appendChild(nameSpan);
+        
+        const timeSpan = document.createElement("span");
+        timeSpan.className = "user-item-time";
+        if (chat.lastTime) timeSpan.textContent = formatTime(chat.lastTime);
+        top.appendChild(timeSpan);
+        
+        // ✅ ИСПРАВЛЕНО: Бейдж непрочитанных из userCache
+        if (chat.unreadCount > 0) {
+            const unreadBadge = document.createElement("span");
+            unreadBadge.className = "user-item-unread";
+            unreadBadge.textContent = chat.unreadCount;
+            top.appendChild(unreadBadge);
+        }
+        
+        content.appendChild(top);
+        
+        const preview = document.createElement("div");
+        preview.className = "user-item-preview";
+        
+        const prefix = document.createElement("span");
+        prefix.className = "user-item-preview-prefix";
+        if (chat.lastFromMe) prefix.textContent = t('you') + ":";
+        preview.appendChild(prefix);
+        
+        const previewText = document.createElement("span");
+        previewText.className = "user-item-preview-text";
+        previewText.textContent = chat.lastMessageText || t('encrypted');
+        preview.appendChild(previewText);
+        
+        content.appendChild(preview);
+        
+        btn.appendChild(avatarWrapper);
+        btn.appendChild(content);
+        
+        if (chat.uid === activeTargetId) {
+            btn.classList.add('active');
+        }
+        
+        btn.onclick = () => selectUser(chat.uid, chat.username);
+        listContainer.appendChild(btn);
+    });
+}
+
+// ============================================
+// ======= ЗАГРУЗКА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ========
+// ============================================
+
+async function loadAllUsers() {
+    try {
+        const res = await fetch("http://localhost:8080/users", { 
+            headers: { "Authorization": "Bearer " + token } 
+        });
+        const users = await res.json();
+        if (!users || users.length === 0) return;
+        
+        allUsersList = users;
+        
+        users.forEach(u => {
+            const uIdStr = String(u.id);
+            if (uIdStr === userId) return;
+            
+            if (!userCache.has(uIdStr)) {
+                userCache.set(uIdStr, {
+                    username: u.username,
+                    lastMessage: null,
+                    lastMessageText: null,
+                    lastTime: null,
+                    lastFromMe: false,
+                    unreadCount: 0
+                });
+            } else {
+                userCache.get(uIdStr).username = u.username;
+            }
+        });
+    } catch (err) {
+        console.log("Failed to load users:", err);
+    }
+}
+
+// ============================================
+// ========== СПИСОК ПОЛЬЗОВАТЕЛЕЙ ===========
+// ============================================
+
+async function loadUsersList() {
+    await loadAllUsers();
+    await loadLastMessages();
+    renderChatsList();
+}
+
+function updateUserPreview(uid) {
     const data = userCache.get(uid);
     if (!data) return;
-    
-    const timeEl = btn.querySelector('.user-item-time');
-    if (timeEl && data.lastTime) timeEl.textContent = formatTime(data.lastTime);
-    
-    const previewText = btn.querySelector('.user-item-preview-text');
-    const prefixEl = btn.querySelector('.user-item-preview-prefix');
-    
-    if (previewText) {
-        previewText.textContent = data.lastMessageText || t('encrypted');
-    }
-    
-    if (prefixEl) {
-        prefixEl.textContent = data.lastFromMe ? t('you') + ":" : "";
-    }
+    renderChatsList();
 }
 
 async function loadLastMessages() {
@@ -852,9 +1108,9 @@ async function loadLastMessages() {
                 lastTime: msg.created_at,
                 lastFromMe: String(msg.from) === userId
             });
-            
-            updateUserPreview(partnerId);
         }
+        
+        renderChatsList();
     } catch (e) {
         console.log("Failed to load last messages:", e);
     }
@@ -951,7 +1207,6 @@ async function login() {
         logMessage(null, statusText, "system");
 
         await loadUsersList();
-        await loadLastMessages();
         initWebSocket();
     } catch (err) { authErrorDiv.innerText = t('server_error'); }
 }
@@ -974,7 +1229,7 @@ function enterChat(username) {
 }
 
 // ============================================
-// ========== СПИСОК ПОЛЬЗОВАТЕЛЕЙ ===========
+// ========== ВЫБОР ЧАТА ======================
 // ============================================
 
 function selectUser(targetId, targetName) {
@@ -997,117 +1252,28 @@ function selectUser(targetId, targetName) {
         chatHeaderPresence.className = `presence-indicator ${sourcePresence.classList.contains('online') ? 'online' : 'offline'}`;
     }
     
-    // Показываем кнопки в шапке чата
     document.getElementById('encryptionBtn').style.display = 'flex';
     document.getElementById('chatSearchBtn').style.display = 'flex';
     
-    document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
-    const activeBtn = document.getElementById("user-btn-" + activeTargetId);
-    if (activeBtn) {
-        activeBtn.classList.add('active');
-        
-        const data = userCache.get(activeTargetId);
-        if (data) data.unreadCount = 0;
-        
-        const unreadEl = activeBtn.querySelector('.user-item-unread');
-        if (unreadEl) unreadEl.remove();
+    // ✅ ИСПРАВЛЕНО: Сброс счётчика непрочитанных в userCache
+    const data = userCache.get(activeTargetId);
+    if (data) {
+        data.unreadCount = 0;
     }
-
+    
     getLogDiv().innerHTML = "";
     shownMessages.clear();
     shownKeyExchanges.clear();
     
-    // Закрываем поиск в чате
     closeChatSearch();
+    
+    // Перерисовываем список после сброса счётчика
+    renderChatsList();
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "get_pubkey", to: activeTargetId }));
     }
     loadHistory(activeTargetId);
-}
-
-async function loadUsersList() {
-    try {
-        const res = await fetch("http://localhost:8080/users", { 
-            headers: { "Authorization": "Bearer " + token } 
-        });
-        const users = await res.json();
-        const listContainer = document.getElementById("usersList");
-        listContainer.innerHTML = "";
-        if (!users || users.length === 0) return;
-
-        users.forEach(u => {
-            const uIdStr = String(u.id); 
-            if (uIdStr === userId) return; 
-            
-            if (!userCache.has(uIdStr)) {
-                userCache.set(uIdStr, { 
-                    username: u.username,
-                    lastMessage: null,
-                    lastMessageText: null,
-                    lastTime: null,
-                    lastFromMe: false,
-                    unreadCount: 0
-                });
-            } else {
-                userCache.get(uIdStr).username = u.username;
-            }
-            
-            const btn = document.createElement("button");
-            btn.className = "user-item";
-            btn.id = "user-btn-" + uIdStr;
-            btn.dataset.username = u.username;
-            btn.dataset.userid = uIdStr;
-            
-            const avatarWrapper = document.createElement("div");
-            avatarWrapper.className = "avatar-wrapper";
-            const avatar = createAvatarElement(u.username);
-            avatarWrapper.appendChild(avatar);
-            
-            const presenceIndicator = document.createElement("span");
-            presenceIndicator.className = "presence-indicator offline";
-            presenceIndicator.id = `presence-${uIdStr}`;
-            avatarWrapper.appendChild(presenceIndicator);
-            
-            const content = document.createElement("div");
-            content.className = "user-item-content";
-            
-            const top = document.createElement("div");
-            top.className = "user-item-top";
-            
-            const nameSpan = document.createElement("span");
-            nameSpan.className = "user-item-name";
-            nameSpan.textContent = u.username;
-            top.appendChild(nameSpan);
-            
-            const timeSpan = document.createElement("span");
-            timeSpan.className = "user-item-time";
-            top.appendChild(timeSpan);
-            
-            content.appendChild(top);
-            
-            const preview = document.createElement("div");
-            preview.className = "user-item-preview";
-            
-            const prefix = document.createElement("span");
-            prefix.className = "user-item-preview-prefix";
-            preview.appendChild(prefix);
-            
-            const previewText = document.createElement("span");
-            previewText.className = "user-item-preview-text";
-            preview.appendChild(previewText);
-            
-            content.appendChild(preview);
-            
-            btn.appendChild(avatarWrapper);
-            btn.appendChild(content);
-            
-            btn.onclick = () => selectUser(uIdStr, u.username);
-            listContainer.appendChild(btn);
-        });
-    } catch (err) { 
-        logMessage(null, t('failed_load_users'), "error"); 
-    }
 }
 
 // ============================================
@@ -1159,15 +1325,24 @@ async function loadHistory(target) {
             const decrypted = await decryptMessage(lastMsg, userId);
             const isMe = String(lastMsg.from) === userId;
             
+            const currentData = userCache.get(target) || {
+                username: activeTargetName,
+                lastMessage: null,
+                lastMessageText: null,
+                lastTime: null,
+                lastFromMe: false,
+                unreadCount: 0
+            };
+            
             userCache.set(target, {
-                ...userCache.get(target),
+                ...currentData,
                 lastMessage: lastMsg,
                 lastMessageText: decrypted,
                 lastTime: lastMsg.created_at,
                 lastFromMe: isMe
             });
             
-            updateUserPreview(target);
+            renderChatsList();
         }
     } catch { 
         logMessage(null, t('error_history'), "error"); 
@@ -1175,7 +1350,7 @@ async function loadHistory(target) {
 }
 
 // ============================================
-// ========== WEBSOCKET С АВТО-RECONNECT ======
+// ========== WEBSOCKET =======================
 // ============================================
 
 function initWebSocket() {
@@ -1196,7 +1371,7 @@ function initWebSocket() {
     };
     
     ws.onclose = () => {
-        if (!token) return; // Разлогинились - не переподключаемся
+        if (!token) return;
         
         wsReconnectAttempts++;
         if (wsReconnectAttempts <= WS_MAX_RECONNECT) {
@@ -1275,45 +1450,61 @@ function initWebSocket() {
                 ? localStorage.getItem("username") 
                 : (userCache.get(fromIdStr)?.username || "User");
             
+            // ✅ ИСПРАВЛЕНО: Корректное увеличение счётчика непрочитанных
             if (!isMe) {
-                const partnerData = userCache.get(fromIdStr);
-                if (partnerData) {
-                    userCache.set(fromIdStr, {
-                        ...partnerData,
-                        lastMessage: d,
-                        lastMessageText: text,
-                        lastTime: d.created_at || Date.now() / 1000,
-                        lastFromMe: false
-                    });
-                    updateUserPreview(fromIdStr);
-                    
-                    if (fromIdStr !== activeTargetId) {
-                        partnerData.unreadCount = (partnerData.unreadCount || 0) + 1;
-                        const sideBtn = document.getElementById("user-btn-" + fromIdStr);
-                        if (sideBtn) {
-                            let unreadBadge = sideBtn.querySelector('.user-item-unread');
-                            if (!unreadBadge) {
-                                unreadBadge = document.createElement("span");
-                                unreadBadge.className = "user-item-unread";
-                                sideBtn.querySelector('.user-item-top').appendChild(unreadBadge);
-                            }
-                            unreadBadge.textContent = partnerData.unreadCount;
-                        }
-                    }
+                let partnerData = userCache.get(fromIdStr);
+                
+                // Если пользователя нет в кэше - создаём запись
+                if (!partnerData) {
+                    const user = allUsersList.find(u => String(u.id) === fromIdStr);
+                    partnerData = {
+                        username: user?.username || fromUsername || "Unknown",
+                        lastMessage: null,
+                        lastMessageText: null,
+                        lastTime: null,
+                        lastFromMe: false,
+                        unreadCount: 0
+                    };
+                    userCache.set(fromIdStr, partnerData);
                 }
+                
+                // Увеличиваем счётчик только если чат не активен
+                if (fromIdStr !== activeTargetId) {
+                    partnerData.unreadCount = (partnerData.unreadCount || 0) + 1;
+                }
+                
+                // Обновляем превью сообщения
+                partnerData.lastMessage = d;
+                partnerData.lastMessageText = text;
+                partnerData.lastTime = d.created_at || Date.now() / 1000;
+                partnerData.lastFromMe = false;
+                
+                userCache.set(fromIdStr, partnerData);
+                renderChatsList();
             } else {
                 const toId = String(d.to);
-                const partnerData = userCache.get(toId);
-                if (partnerData) {
-                    userCache.set(toId, {
-                        ...partnerData,
-                        lastMessage: d,
-                        lastMessageText: text,
-                        lastTime: d.created_at || Date.now() / 1000,
-                        lastFromMe: true
-                    });
-                    updateUserPreview(toId);
+                let partnerData = userCache.get(toId);
+                
+                if (!partnerData) {
+                    const user = allUsersList.find(u => String(u.id) === toId);
+                    partnerData = {
+                        username: user?.username || "Unknown",
+                        lastMessage: null,
+                        lastMessageText: null,
+                        lastTime: null,
+                        lastFromMe: false,
+                        unreadCount: 0
+                    };
+                    userCache.set(toId, partnerData);
                 }
+                
+                partnerData.lastMessage = d;
+                partnerData.lastMessageText = text;
+                partnerData.lastTime = d.created_at || Date.now() / 1000;
+                partnerData.lastFromMe = true;
+                
+                userCache.set(toId, partnerData);
+                renderChatsList();
             }
             
             if (fromIdStr === activeTargetId || (isMe && String(d.to) === activeTargetId)) {
@@ -1401,15 +1592,13 @@ async function send() {
 // ============================================
 
 function logout() {
-    // Останавливаем reconnect
     if (wsReconnectTimer) {
         clearTimeout(wsReconnectTimer);
         wsReconnectTimer = null;
     }
     wsReconnectAttempts = 0;
     
-    const savedToken = token; // Сохраняем для проверки
-    token = null; // Сначала обнуляем token, чтобы onclose не запускал reconnect
+    token = null;
     
     if (ws) { 
         ws.close(); 
@@ -1426,9 +1615,10 @@ function logout() {
     userCache.clear();
     shownKeyExchanges.clear();
     pendingReadQueue.clear();
-    pendingMessages && Object.keys(pendingMessages).forEach(k => delete pendingMessages[k]);
+    if (pendingMessages) Object.keys(pendingMessages).forEach(k => delete pendingMessages[k]);
     chatSearchMatches = [];
     chatSearchActiveIndex = -1;
+    allUsersList = [];
 
     localStorage.removeItem("token");
     localStorage.removeItem("userId");
@@ -1445,7 +1635,6 @@ function logout() {
     document.getElementById("authPassword").value = ""; 
     getAuthErrorDiv().innerText = "";
     
-    // Сбрасываем поиск
     const searchInput = document.getElementById('searchInput');
     if (searchInput) searchInput.value = '';
     const searchClear = document.getElementById('searchClear');
@@ -1458,7 +1647,6 @@ function logout() {
     document.getElementById('encryptionBtn').style.display = 'none';
     document.getElementById('chatSearchBtn').style.display = 'none';
     
-    // Сбрасываем status bar
     updateConnectionStatus('connecting');
 }
 
@@ -1490,7 +1678,6 @@ window.addEventListener('DOMContentLoaded', async () => {
                 logMessage(null, statusText, "system");
 
                 await loadUsersList();
-                await loadLastMessages();
                 initWebSocket();
             } else {
                 localStorage.removeItem("token");

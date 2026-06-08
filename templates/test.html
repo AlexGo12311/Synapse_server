@@ -36,44 +36,45 @@
 <!-- ============================================ -->
 <div id="chatScreen">
     
-    <!-- ================== SIDEBAR ================== -->
     <div class="sidebar">
         
-        <!-- 1. Status Bar (подключение к серверу) -->
         <div class="status-bar status-connecting" id="statusBar">
             <span class="status-dot"></span>
             <span class="status-text" data-i18n="connecting">Connecting...</span>
         </div>
         
-        <!-- 2. User Info Header (компактный) -->
         <div class="sidebar-user-header">
             <div class="avatar-wrapper">
                 <div class="avatar small" id="myAvatar"></div>
                 <span class="presence-indicator online"></span>
             </div>
             <span class="my-username" id="myUsernameDisplay"></span>
+            <button class="new-chat-btn" id="newChatBtn" onclick="openNewChatModal()" title="New chat">
+                <span>+</span>
+            </button>
         </div>
         
-        <!-- 3. Search (показывается только во вкладке Chats) -->
         <div class="search-container" id="searchContainer">
             <span class="search-icon">🔍</span>
             <input type="text" id="searchInput" placeholder="Search chats..." data-i18n-placeholder="search_chats">
             <button class="search-clear" id="searchClear" style="display:none;">×</button>
         </div>
         
-        <!-- 4. Tab Content (переключаемый контент) -->
         <div class="sidebar-content">
             
-            <!-- ===== TAB: CHATS ===== -->
             <div class="tab-pane active" id="tab-chats">
                 <div id="usersList"></div>
+                <div class="no-chats-state" id="noChatsState" style="display:none;">
+                    <div class="empty-icon">💬</div>
+                    <div class="empty-title" data-i18n="no_chats_title">No conversations yet</div>
+                    <div class="empty-subtitle" data-i18n="no_chats_subtitle">Tap + to start a new chat</div>
+                </div>
                 <div class="search-empty" id="searchEmptyState" style="display:none;">
                     <div class="empty-icon">🔍</div>
                     <div class="empty-text" data-i18n="no_results">No chats found</div>
                 </div>
             </div>
             
-            <!-- ===== TAB: KEYS ===== -->
             <div class="tab-pane" id="tab-keys">
                 <div class="keys-screen">
                     <div class="keys-icon">🔐</div>
@@ -81,15 +82,12 @@
                     <p class="keys-description" data-i18n="your_key_description">
                         Share this code with contacts so they can verify your identity.
                     </p>
-                    
                     <div class="keys-fingerprint-container">
                         <div class="keys-fingerprint" id="myFingerprint">Loading...</div>
                     </div>
-                    
                     <button class="keys-copy-btn" onclick="copyMyFingerprint()" data-i18n="copy_key">
                         📋 Copy My Code
                     </button>
-                    
                     <div class="keys-warning">
                         <div class="warning-icon">⚠️</div>
                         <div class="warning-text" data-i18n="keys_warning">
@@ -99,11 +97,8 @@
                 </div>
             </div>
             
-            <!-- ===== TAB: SETTINGS ===== -->
             <div class="tab-pane" id="tab-settings">
                 <div class="settings-inline">
-                    
-                    <!-- Секция: Язык -->
                     <div class="settings-section">
                         <h4 data-i18n="language">🌐 Language</h4>
                         <div class="language-selector">
@@ -111,8 +106,6 @@
                             <button class="lang-option" data-lang="ru" onclick="setLanguage('ru')">🇷🇺 Русский</button>
                         </div>
                     </div>
-                    
-                    <!-- Секция: Режим -->
                     <div class="settings-section">
                         <h4 data-i18n="appearance">🌓 Appearance</h4>
                         <div class="theme-mode-toggle">
@@ -126,22 +119,16 @@
                             </button>
                         </div>
                     </div>
-                    
-                    <!-- Секция: Тема -->
                     <div class="settings-section">
                         <h4 data-i18n="color_theme">🎨 Color Theme</h4>
                         <div class="themes-grid" id="themesGrid"></div>
                     </div>
-                    
-                    <!-- Секция: Logout -->
                     <div class="settings-section logout-section">
                         <button class="logout-btn" onclick="logout()">
                             <span>🚪</span>
                             <span data-i18n="logout">Log Out</span>
                         </button>
                     </div>
-                    
-                    <!-- Версия -->
                     <div class="settings-version">
                         Synapse v1.0 · End-to-End Encrypted
                     </div>
@@ -149,7 +136,6 @@
             </div>
         </div>
         
-        <!-- 5. Tabbar (нижняя навигация) -->
         <div class="tabbar">
             <button class="tab-btn active" data-tab="chats" onclick="switchTab('chats')">
                 <span class="tab-icon">💬</span>
@@ -166,7 +152,6 @@
         </div>
     </div>
     
-    <!-- ================== CHAT AREA ================== -->
     <div class="chat-area">
         <div class="chat-header">
             <div class="avatar-wrapper" id="chatHeaderAvatarWrapper">
@@ -177,8 +162,6 @@
                 <div class="chat-header-label" data-i18n="chat_with">Chat with</div>
                 <div class="chat-header-name" id="activeChatTarget" data-i18n="select_user">Select a user</div>
             </div>
-            
-            <!-- Кнопки в шапке чата -->
             <div class="chat-header-actions">
                 <button class="icon-btn chat-search-btn" id="chatSearchBtn" title="Search in chat" style="display:none;">🔍</button>
                 <button class="icon-btn encryption-btn" id="encryptionBtn" title="Encryption code" style="display:none;">🔐</button>
@@ -187,7 +170,6 @@
         
         <div id="log"></div>
         
-        <!-- Панель поиска в чате (скрыта по умолчанию) -->
         <div class="chat-search-panel" id="chatSearchPanel" style="display:none;">
             <input type="text" id="chatSearchInput" placeholder="Search in conversation..." data-i18n-placeholder="search_messages">
             <div class="chat-search-controls">
@@ -209,6 +191,27 @@
 </div>
 
 <!-- ============================================ -->
+<!-- ======= МОДАЛКА НОВОГО ЧАТА ================ -->
+<!-- ============================================ -->
+<div class="new-chat-overlay" id="newChatOverlay">
+    <div class="new-chat-modal">
+        <div class="new-chat-header">
+            <h3>✏️ <span data-i18n="new_chat">New Conversation</span></h3>
+            <button class="settings-close" onclick="closeNewChatModal()">×</button>
+        </div>
+        <div class="new-chat-search">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="newChatSearchInput" placeholder="Search users..." data-i18n-placeholder="search_users">
+        </div>
+        <div class="new-chat-list" id="newChatList"></div>
+        <div class="new-chat-empty" id="newChatEmpty" style="display:none;">
+            <div class="empty-icon">👤</div>
+            <div class="empty-text" data-i18n="no_users">No users found</div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================ -->
 <!-- ========= МОДАЛЬНОЕ ОКНО КОДА ШИФРОВАНИЯ === -->
 <!-- ============================================ -->
 <div class="encryption-overlay" id="encryptionOverlay">
@@ -221,7 +224,6 @@
             <p class="encryption-info" data-i18n="encryption_info">
                 Compare this code with your contact to verify encryption security:
             </p>
-            
             <div class="encryption-section">
                 <div class="encryption-label">
                     <span data-i18n="shared_code">Shared Code</span>
@@ -229,7 +231,6 @@
                 </div>
                 <div class="encryption-code" id="sharedCode">—</div>
             </div>
-            
             <div class="encryption-section">
                 <div class="encryption-label">
                     <span data-i18n="your_key">Your Key</span>
@@ -237,18 +238,15 @@
                 </div>
                 <div class="encryption-code" id="myCode">—</div>
             </div>
-            
             <div class="encryption-section">
                 <div class="encryption-label">
                     <span id="peerNameLabel" data-i18n="peer_key">Peer's Key</span>
                 </div>
                 <div class="encryption-code" id="peerCode">—</div>
             </div>
-            
             <button class="btn-copy" onclick="copyEncryptionCode()" data-i18n="copy_code">
                 📋 Copy Code
             </button>
-            
             <p class="encryption-warning" data-i18n="encryption_warning">
                 If this code changes, it may mean your contact reinstalled the app or someone is trying to intercept your conversation.
             </p>
