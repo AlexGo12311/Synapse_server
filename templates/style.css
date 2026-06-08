@@ -2,13 +2,17 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
     margin: 0; 
     padding: 0;
-    background: #f0f2f5; 
+    background: var(--surface-main, #f0f2f5); 
     height: 100vh; 
     display: flex; 
     justify-content: center; 
     align-items: center; 
-    transition: background 0.3s, color 0.3s;
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s ease;
 }
+
+/* ============================================ */
+/* ============ CSS ПЕРЕМЕННЫЕ (СВЕТЛАЯ) ======= */
+/* ============================================ */
 
 :root {
     --accent-color: #007bff;
@@ -18,52 +22,78 @@ body {
     --bubble-other: #ffffff;
     --text-color: #111b21;
     --secondary-text: #667781;
-    --sidebar-bg: #ffffff;
-    --border-color: #e0e0e0;
-    --header-bg: #f8f9fa;
-    --input-bg: #ffffff;
-    --hover-bg: #f8f9fa;
-    --panel-bg: #ffffff;
+    
+    /* 🎨 Material You surface colors - меняются с темой */
+    --surface-main: #f0f2f5;
+    --surface-container: #ffffff;
+    --surface-header: #f8f9fa;
+    --surface-input: #ffffff;
+    --surface-hover: #f8f9fa;
+    --surface-elevated: #ffffff;
+    --surface-border: #e0e0e0;
+    
+    --sidebar-bg: var(--surface-container);
+    --border-color: var(--surface-border);
+    --header-bg: var(--surface-header);
+    --input-bg: var(--surface-input);
+    --hover-bg: var(--surface-hover);
+    --panel-bg: var(--surface-elevated);
     --system-text: #54656f;
+    
     --status-connected: #4CAF50;
     --status-connecting: #FFC107;
     --status-reconnecting: #FF9800;
     --status-disconnected: #F44336;
 }
 
+/* ============================================ */
+/* ============ ТЁМНАЯ ТЕМА =================== */
+/* ============================================ */
+
 body.dark-theme {
-    background: #0e1621;
-    color: #ffffff;
+    background: var(--surface-main);
+    color: var(--text-color);
+    
     --accent-color: #5ca8f5;
     --accent-color-hover: #4a95e2;
-    --chat-bg: #0e1621;
+    --chat-bg: var(--surface-main);
     --bubble-me: #2b5278;
     --bubble-other: #182533;
     --text-color: #ffffff;
     --secondary-text: #6c7883;
-    --sidebar-bg: #17212b;
-    --border-color: #0c1621;
-    --header-bg: #242f3d;
-    --input-bg: #242f3d;
-    --hover-bg: #2b3a4a;
-    --panel-bg: #17212b;
+    
+    /* 🎨 Material You surface для тёмной темы */
+    --surface-main: #0e1621;
+    --surface-container: #17212b;
+    --surface-header: #242f3d;
+    --surface-input: #242f3d;
+    --surface-hover: #2b3a4a;
+    --surface-elevated: #17212b;
+    --surface-border: #0c1621;
+    
+    --sidebar-bg: var(--surface-container);
+    --border-color: var(--surface-border);
+    --header-bg: var(--surface-header);
+    --input-bg: var(--surface-input);
+    --hover-bg: var(--surface-hover);
+    --panel-bg: var(--surface-elevated);
     --system-text: #8a9ba8;
 }
 
 body.dark-theme #authScreen {
-    background: #17212b;
+    background: var(--surface-container);
     color: white;
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
 
 body.dark-theme #authScreen input {
-    background: #242f3d;
-    border-color: #0c1621;
+    background: var(--surface-input);
+    border-color: var(--border-color);
     color: white;
 }
 
 body.dark-theme #authScreen input:focus {
-    background: #2b3a4a;
+    background: var(--surface-hover);
     border-color: var(--accent-color);
 }
 
@@ -72,13 +102,18 @@ body.dark-theme .system-box {
     color: #d1d5db;
 }
 
+/* ============================================ */
+/* ============ ЭКРАН АВТОРИЗАЦИИ ============= */
+/* ============================================ */
+
 #authScreen {
-    background: white;
+    background: var(--surface-container);
     padding: 40px;
     border-radius: 16px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.12);
     width: 360px;
     text-align: center;
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 #authScreen h2 { 
     margin-top: 0; 
@@ -96,19 +131,15 @@ body.dark-theme .system-box {
     border-radius: 10px;
     box-sizing: border-box;
     font-size: 15px;
-    background: #f8f9fa;
+    background: var(--surface-input);
     transition: all 0.2s;
     color: var(--text-color);
 }
 #authScreen input:focus {
     border-color: var(--accent-color);
     outline: none;
-    background: white;
+    background: var(--surface-container);
     box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
-}
-
-body.dark-theme #authScreen input:focus {
-    background: #2b3a4a;
 }
 
 .auth-buttons { display: flex; gap: 12px; margin-top: 24px; }
@@ -148,11 +179,6 @@ body.dark-theme #authScreen input:focus {
     transition: all 0.2s;
 }
 
-body.dark-theme .lang-btn {
-    color: #8a9ba8;
-    border-color: #0c1621;
-}
-
 .lang-btn.active {
     background: var(--accent-color);
     color: white;
@@ -167,14 +193,22 @@ body.dark-theme .lang-btn {
     font-weight: 500; 
 }
 
+/* ============================================ */
+/* ============ ЭКРАН МЕССЕНДЖЕРА ============= */
+/* ============================================ */
+
 #chatScreen { 
     display: none; 
     width: 100vw; 
     height: 100vh; 
-    background: var(--sidebar-bg);
+    background: var(--surface-main);
     overflow: hidden;
     color: var(--text-color);
 }
+
+/* ============================================ */
+/* =============== SIDEBAR ==================== */
+/* ============================================ */
 
 .sidebar { 
     width: 340px; 
@@ -183,6 +217,7 @@ body.dark-theme .lang-btn {
     display: flex; 
     flex-direction: column;
     position: relative;
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.5s ease;
 }
 
 .status-bar {
@@ -259,6 +294,7 @@ body.dark-theme .status-bar.status-reconnecting {
     gap: 10px;
     border-bottom: 1px solid var(--border-color);
     background: var(--header-bg);
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .my-username {
@@ -566,6 +602,7 @@ body.dark-theme .status-bar.status-reconnecting {
     background: var(--header-bg);
     padding: 6px 4px 8px;
     gap: 2px;
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .tab-btn {
@@ -915,12 +952,17 @@ body.dark-theme .warning-text {
     opacity: 0.7;
 }
 
+/* ============================================ */
+/* =============== ОБЛАСТЬ ЧАТА =============== */
+/* ============================================ */
+
 .chat-area { 
     flex: 1; 
     display: flex; 
     flex-direction: column; 
     background: var(--chat-bg);
     position: relative;
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .chat-header { 
@@ -932,6 +974,7 @@ body.dark-theme .warning-text {
     gap: 12px;
     z-index: 10;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .chat-header-info {
@@ -1114,6 +1157,7 @@ body.dark-theme .warning-text {
     background: var(--header-bg); 
     align-items: center; 
     gap: 12px;
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .input-area input { 
@@ -1281,37 +1325,77 @@ body.dark-theme .warning-text {
     background: rgba(220, 53, 69, 0.9); 
 }
 
-/* ===== ПЛАШКА ШИФРОВАНИЯ (GLASSMORPHISM) ===== */
+/* ===== ПЛАШКА ШИФРОВАНИЯ (Мягкая, не вырвиглазная) ===== */
+/* Полупрозрачный акцентный фон + тонкая рамка + blur для читаемости */
+
+.system-row.key-exchange {
+    animation: keyExchangeAppear 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes keyExchangeAppear {
+    0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.96);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 .system-row.key-exchange .system-box {
-    background: color-mix(in srgb, var(--accent-color) 75%, rgba(0, 0, 0, 0.45));
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    /* Светлая тема: мягкий акцентный оттенок на полупрозрачной белой подложке */
+    background: color-mix(in srgb, var(--accent-color) 15%, rgba(255,255,255,0.85));
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    color: var(--text-color);
+    border: 1px solid color-mix(in srgb, var(--accent-color) 30%, transparent);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.25s ease;
     max-width: 90%;
     padding: 12px 18px;
     font-weight: 600;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Тёмная тема: тёмная полупрозрачная подложка с акцентным оттенком */
+body.dark-theme .system-row.key-exchange .system-box {
+    background: color-mix(in srgb, var(--accent-color) 18%, rgba(20,25,35,0.85));
+    border-color: color-mix(in srgb, var(--accent-color) 40%, transparent);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .system-row.key-exchange .system-box:hover {
-    background: color-mix(in srgb, var(--accent-color) 85%, rgba(0, 0, 0, 0.5));
+    background: color-mix(in srgb, var(--accent-color) 22%, rgba(255,255,255,0.92));
+    border-color: color-mix(in srgb, var(--accent-color) 50%, transparent);
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+body.dark-theme .system-row.key-exchange .system-box:hover {
+    background: color-mix(in srgb, var(--accent-color) 25%, rgba(30,40,55,0.9));
+    border-color: var(--accent-color);
+}
+
+.system-row.key-exchange .system-box > span:first-child {
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+/* Fingerprint — акцентный цвет с лёгкой тенью */
 .key-exchange-fingerprint {
     display: block;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
     font-size: 11px;
     margin-top: 6px;
     letter-spacing: 1px;
-    color: rgba(255, 255, 255, 0.9);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    color: var(--accent-color);
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+body.dark-theme .key-exchange-fingerprint {
+    opacity: 0.95;
 }
 
 /* ===== КНОПКА "+" НОВОГО ЧАТА ===== */
@@ -1702,6 +1786,155 @@ body.dark-theme .encryption-warning {
     color: #ffc107;
 }
 
+/* ============================================ */
+/* ====== WELCOME SCREEN ====================== */
+/* ============================================ */
+
+.welcome-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    background: var(--surface-main);
+    text-align: center;
+    gap: 12px;
+    animation: welcomeFadeIn 0.5s ease;
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes welcomeFadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.welcome-icon {
+    font-size: 72px;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--accent-color) 30%, transparent));
+    animation: welcomeIconFloat 3s ease-in-out infinite;
+}
+
+@keyframes welcomeIconFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.welcome-title {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-color-hover));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+}
+
+.welcome-subtitle {
+    margin: 0 0 28px 0;
+    font-size: 15px;
+    color: var(--secondary-text);
+    max-width: 320px;
+    line-height: 1.5;
+}
+
+.welcome-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 360px;
+    margin-bottom: 32px;
+}
+
+.welcome-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: var(--surface-container);
+    border: 1px solid var(--surface-border);
+    border-radius: 16px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-color);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.welcome-action-btn::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--accent-color);
+    transform: scaleY(0);
+    transition: transform 0.25s;
+}
+
+.welcome-action-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent-color);
+    transform: translateX(4px);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--accent-color) 15%, transparent);
+}
+
+.welcome-action-btn:hover::before {
+    transform: scaleY(1);
+}
+
+.welcome-action-btn:active {
+    transform: translateX(4px) scale(0.98);
+}
+
+.welcome-action-icon {
+    font-size: 28px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+    border-radius: 12px;
+    flex-shrink: 0;
+}
+
+.welcome-action-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.welcome-action-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.welcome-action-desc {
+    font-size: 12px;
+    color: var(--secondary-text);
+    line-height: 1.3;
+}
+
+.welcome-hint {
+    font-size: 13px;
+    color: var(--secondary-text);
+    padding: 12px 20px;
+    background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+    border-radius: 20px;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 20%, transparent);
+    max-width: 400px;
+}
+
+/* Скроллбар */
 ::-webkit-scrollbar {
     width: 8px;
 }

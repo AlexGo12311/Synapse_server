@@ -90,7 +90,15 @@ const I18N = {
         no_chats_title: "No conversations yet",
         no_chats_subtitle: "Tap + to start a new chat",
         continue_chat: "Continue chat",
-        start_chat: "Start new chat"
+        start_chat: "Start new chat",
+        welcome_subtitle: "Secure end-to-end encrypted messenger",
+        welcome_theme: "Customize Appearance",
+        welcome_theme_desc: "Themes, colors, dark mode",
+        welcome_lang: "Language",
+        welcome_lang_desc: "English, Русский",
+        welcome_keys: "Your Encryption Key",
+        welcome_keys_desc: "Verify your identity",
+        welcome_hint: "Select a conversation or tap + to start a new one"
     },
     ru: {
         login: "Войти",
@@ -144,7 +152,15 @@ const I18N = {
         no_chats_title: "Пока нет диалогов",
         no_chats_subtitle: "Нажмите + чтобы начать новый чат",
         continue_chat: "Продолжить диалог",
-        start_chat: "Начать новый чат"
+        start_chat: "Начать новый чат",
+        welcome_subtitle: "Безопасный мессенджер с end-to-end шифрованием",
+        welcome_theme: "Настроить внешний вид",
+        welcome_theme_desc: "Темы, цвета, тёмный режим",
+        welcome_lang: "Язык интерфейса",
+        welcome_lang_desc: "English, Русский",
+        welcome_keys: "Ваш ключ шифрования",
+        welcome_keys_desc: "Подтвердите свою личность",
+        welcome_hint: "Выберите диалог или нажмите + чтобы начать новый"
     }
 };
 
@@ -158,7 +174,7 @@ function setLanguage(lang) {
     if (!I18N[lang]) return;
     currentLang = lang;
     
-    try { localStorage.setItem('synapse_lang', lang); } catch (e) {}
+    try { localStorage.setItem('amini_lang', lang); } catch (e) {}
     
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
@@ -192,18 +208,82 @@ function setLanguage(lang) {
 }
 
 // ============================================
-// ============ СИСТЕМА ТЕМ ===================
+// ============ 🎨 MATERIAL YOU THEMES ========
 // ============================================
 
 const THEMES = [
-    { name: "Ocean Blue", wallpaper: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", wallpaperDark: "linear-gradient(135deg, #1e3a8a 0%, #4c1d95 100%)", accent: "#4A90E2", accentHover: "#357ABD", bubbleMe: "#D6EAF8", bubbleMeDark: "#2b5278" },
-    { name: "Forest", wallpaper: "linear-gradient(135deg, #134E5E 0%, #71B280 100%)", wallpaperDark: "linear-gradient(135deg, #0a2e26 0%, #1e5a3f 100%)", accent: "#27AE60", accentHover: "#229954", bubbleMe: "#D5F5E3", bubbleMeDark: "#1e5a3f" },
-    { name: "Sunset", wallpaper: "linear-gradient(135deg, #FF6B6B 0%, #FFA500 50%, #FFE66D 100%)", wallpaperDark: "linear-gradient(135deg, #7d1f1f 0%, #7d4a1f 50%, #5a4318 100%)", accent: "#E67E22", accentHover: "#D35400", bubbleMe: "#FDEBD0", bubbleMeDark: "#7d4a1f" },
-    { name: "Night Sky", wallpaper: "linear-gradient(135deg, #2C3E50 0%, #4CA1AF 100%)", wallpaperDark: "linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%)", accent: "#3498DB", accentHover: "#2980B9", bubbleMe: "#AED6F1", bubbleMeDark: "#2b5278" },
-    { name: "Rose Gold", wallpaper: "linear-gradient(135deg, #E8B4B8 0%, #D4A5A5 50%, #C89696 100%)", wallpaperDark: "linear-gradient(135deg, #3d1f2f 0%, #4d2a2a 50%, #5a2f2f 100%)", accent: "#C0392B", accentHover: "#A93226", bubbleMe: "#FADBD8", bubbleMeDark: "#7d3a2f" },
-    { name: "Mint", wallpaper: "linear-gradient(135deg, #A8E6CF 0%, #DCEDC1 50%, #FFD3B6 100%)", wallpaperDark: "linear-gradient(135deg, #1e3a2f 0%, #2d4a3f 50%, #3a4a2f 100%)", accent: "#16A085", accentHover: "#138D75", bubbleMe: "#D1F2EB", bubbleMeDark: "#1e5a4d" },
-    { name: "Purple Haze", wallpaper: "linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)", wallpaperDark: "linear-gradient(135deg, #2d0a4d 0%, #1a0033 100%)", accent: "#8E44AD", accentHover: "#7D3C98", bubbleMe: "#E8DAEF", bubbleMeDark: "#5a2f7a" },
-    { name: "Classic", wallpaper: "linear-gradient(135deg, #ECE9E6 0%, #FFFFFF 100%)", wallpaperDark: "linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%)", accent: "#007BFF", accentHover: "#0056B3", bubbleMe: "#D9FDD3", bubbleMeDark: "#2b5278" }
+    { 
+        name: "Ocean Blue", 
+        wallpaper: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", 
+        wallpaperDark: "linear-gradient(135deg, #1e3a8a 0%, #4c1d95 100%)", 
+        accent: "#4A90E2", accentHover: "#357ABD", 
+        bubbleMe: "#D6EAF8", bubbleMeDark: "#2b5278",
+        surfaceLight: { main: "#eef4ff", container: "#ffffff", header: "#e1ebfa", input: "#ffffff", hover: "#e8f0fb", border: "#d6e3f5" },
+        surfaceDark: { main: "#0d1520", container: "#172230", header: "#1e2a3a", input: "#1e2a3a", hover: "#253447", border: "#0a1018" }
+    },
+    { 
+        name: "Forest", 
+        wallpaper: "linear-gradient(135deg, #134E5E 0%, #71B280 100%)", 
+        wallpaperDark: "linear-gradient(135deg, #0a2e26 0%, #1e5a3f 100%)", 
+        accent: "#27AE60", accentHover: "#229954", 
+        bubbleMe: "#D5F5E3", bubbleMeDark: "#1e5a3f",
+        surfaceLight: { main: "#eefaf3", container: "#ffffff", header: "#def5e8", input: "#ffffff", hover: "#e5f7ec", border: "#c8ebd6" },
+        surfaceDark: { main: "#0a1612", container: "#15261f", header: "#1c332a", input: "#1c332a", hover: "#254536", border: "#08100c" }
+    },
+    { 
+        name: "Sunset", 
+        wallpaper: "linear-gradient(135deg, #FF6B6B 0%, #FFA500 50%, #FFE66D 100%)", 
+        wallpaperDark: "linear-gradient(135deg, #7d1f1f 0%, #7d4a1f 50%, #5a4318 100%)", 
+        accent: "#E67E22", accentHover: "#D35400", 
+        bubbleMe: "#FDEBD0", bubbleMeDark: "#7d4a1f",
+        surfaceLight: { main: "#fff5ec", container: "#ffffff", header: "#ffe9d4", input: "#ffffff", hover: "#ffefdd", border: "#f5d4b0" },
+        surfaceDark: { main: "#1a110a", container: "#281910", header: "#352215", input: "#352215", hover: "#43301f", border: "#120a06" }
+    },
+    { 
+        name: "Night Sky", 
+        wallpaper: "linear-gradient(135deg, #2C3E50 0%, #4CA1AF 100%)", 
+        wallpaperDark: "linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%)", 
+        accent: "#3498DB", accentHover: "#2980B9", 
+        bubbleMe: "#AED6F1", bubbleMeDark: "#2b5278",
+        surfaceLight: { main: "#edf5fb", container: "#ffffff", header: "#d9ebf7", input: "#ffffff", hover: "#e3eff8", border: "#c3dced" },
+        surfaceDark: { main: "#0a1620", container: "#15222e", header: "#1c2d3d", input: "#1c2d3d", hover: "#243c50", border: "#081018" }
+    },
+    { 
+        name: "Rose Gold", 
+        wallpaper: "linear-gradient(135deg, #E8B4B8 0%, #D4A5A5 50%, #C89696 100%)", 
+        wallpaperDark: "linear-gradient(135deg, #3d1f2f 0%, #4d2a2a 50%, #5a2f2f 100%)", 
+        accent: "#C0392B", accentHover: "#A93226", 
+        bubbleMe: "#FADBD8", bubbleMeDark: "#7d3a2f",
+        surfaceLight: { main: "#fef0f1", container: "#ffffff", header: "#fbe0e2", input: "#ffffff", hover: "#fde7e9", border: "#f2c4c7" },
+        surfaceDark: { main: "#1a0e11", container: "#28171b", header: "#351f24", input: "#351f24", hover: "#432c31", border: "#120a0c" }
+    },
+    { 
+        name: "Mint", 
+        wallpaper: "linear-gradient(135deg, #A8E6CF 0%, #DCEDC1 50%, #FFD3B6 100%)", 
+        wallpaperDark: "linear-gradient(135deg, #1e3a2f 0%, #2d4a3f 50%, #3a4a2f 100%)", 
+        accent: "#16A085", accentHover: "#138D75", 
+        bubbleMe: "#D1F2EB", bubbleMeDark: "#1e5a4d",
+        surfaceLight: { main: "#eefaf6", container: "#ffffff", header: "#def5ee", input: "#ffffff", hover: "#e5f7f2", border: "#c5e8de" },
+        surfaceDark: { main: "#0a1612", container: "#15261f", header: "#1c332a", input: "#1c332a", hover: "#254536", border: "#08100c" }
+    },
+    { 
+        name: "Purple Haze", 
+        wallpaper: "linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)", 
+        wallpaperDark: "linear-gradient(135deg, #2d0a4d 0%, #1a0033 100%)", 
+        accent: "#8E44AD", accentHover: "#7D3C98", 
+        bubbleMe: "#E8DAEF", bubbleMeDark: "#5a2f7a",
+        surfaceLight: { main: "#f5f0fc", container: "#ffffff", header: "#e8dff8", input: "#ffffff", hover: "#ece4f8", border: "#d7c6eb" },
+        surfaceDark: { main: "#120a1e", container: "#1e1330", header: "#281c42", input: "#281c42", hover: "#352755", border: "#0c0618" }
+    },
+    { 
+        name: "Classic", 
+        wallpaper: "linear-gradient(135deg, #ECE9E6 0%, #FFFFFF 100%)", 
+        wallpaperDark: "linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%)", 
+        accent: "#007BFF", accentHover: "#0056B3", 
+        bubbleMe: "#D9FDD3", bubbleMeDark: "#2b5278",
+        surfaceLight: { main: "#f8f9fa", container: "#ffffff", header: "#f1f3f5", input: "#ffffff", hover: "#f4f5f7", border: "#dee2e6" },
+        surfaceDark: { main: "#0e1621", container: "#17212b", header: "#242f3d", input: "#242f3d", hover: "#2b3a4a", border: "#0c1621" }
+    }
 ];
 
 let currentThemeIndex = 0;
@@ -673,7 +753,7 @@ async function showKeyExchangeIfNeeded(targetId) {
 }
 
 // ============================================
-// ========== ПРИМЕНЕНИЕ ТЕМЫ ================
+// ========== 🎨 ПРИМЕНЕНИЕ ТЕМЫ (Material You) 
 // ============================================
 
 function applyTheme(themeIndex) {
@@ -688,9 +768,21 @@ function applyTheme(themeIndex) {
     root.style.setProperty('--bubble-me', isDark ? theme.bubbleMeDark : theme.bubbleMe);
     root.style.setProperty('--chat-bg-image', isDark ? theme.wallpaperDark : theme.wallpaper);
     
+    // 🎨 Material You surface colors
+    const surface = isDark ? theme.surfaceDark : theme.surfaceLight;
+    if (surface) {
+        root.style.setProperty('--surface-main', surface.main);
+        root.style.setProperty('--surface-container', surface.container);
+        root.style.setProperty('--surface-header', surface.header);
+        root.style.setProperty('--surface-input', surface.input);
+        root.style.setProperty('--surface-hover', surface.hover);
+        root.style.setProperty('--surface-elevated', surface.container);
+        root.style.setProperty('--surface-border', surface.border);
+    }
+    
     currentThemeIndex = themeIndex;
     
-    try { localStorage.setItem('synapse_theme', themeIndex.toString()); } catch (e) {}
+    try { localStorage.setItem('amini_theme', themeIndex.toString()); } catch (e) {}
     
     document.querySelectorAll('.theme-card').forEach((card, idx) => {
         card.classList.toggle('active', idx === themeIndex);
@@ -706,7 +798,7 @@ function setThemeMode(mode) {
         document.body.classList.remove('dark-theme');
     }
     
-    try { localStorage.setItem('synapse_mode', mode); } catch (e) {}
+    try { localStorage.setItem('amini_mode', mode); } catch (e) {}
     
     document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.mode === mode);
@@ -718,12 +810,12 @@ function setThemeMode(mode) {
 
 function loadSavedTheme() {
     try {
-        const savedMode = localStorage.getItem('synapse_mode');
+        const savedMode = localStorage.getItem('amini_mode');
         if (savedMode === 'dark' || savedMode === 'light') currentThemeMode = savedMode;
     } catch (e) {}
     
     try {
-        const saved = localStorage.getItem('synapse_theme');
+        const saved = localStorage.getItem('amini_theme');
         if (saved !== null) {
             const idx = parseInt(saved, 10);
             if (!isNaN(idx) && idx >= 0 && idx < THEMES.length) currentThemeIndex = idx;
@@ -808,7 +900,7 @@ function initUI() {
 }
 
 // ============================================
-// ========= 🆕 МОДАЛКА НОВОГО ЧАТА ===========
+// ========= МОДАЛКА НОВОГО ЧАТА ==============
 // ============================================
 
 function openNewChatModal() {
@@ -932,7 +1024,52 @@ function startChatWith(targetId, targetName) {
 }
 
 // ============================================
-// ======= 🆕 РЕНДЕР СПИСКА АКТИВНЫХ ЧАТОВ ====
+// ========= WELCOME SCREEN ACTIONS ===========
+// ============================================
+
+function openThemeSettings() {
+    switchTab('settings');
+    setTimeout(() => {
+        const themeSection = document.querySelector('#tab-settings .settings-section:nth-of-type(3)');
+        if (themeSection) {
+            themeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, 100);
+}
+
+function openLanguageSettings() {
+    switchTab('settings');
+    setTimeout(() => {
+        const langSection = document.querySelector('#tab-settings .settings-section:nth-of-type(1)');
+        if (langSection) {
+            langSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, 100);
+}
+
+function updateChatAreaVisibility() {
+    const chatHeader = document.getElementById('chatHeader');
+    const logDiv = document.getElementById('log');
+    const inputArea = document.getElementById('inputArea');
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    const chatSearchPanel = document.getElementById('chatSearchPanel');
+    
+    if (activeTargetId) {
+        if (welcomeScreen) welcomeScreen.style.display = 'none';
+        if (chatHeader) chatHeader.style.display = 'flex';
+        if (logDiv) logDiv.style.display = 'flex';
+        if (inputArea) inputArea.style.display = 'flex';
+    } else {
+        if (welcomeScreen) welcomeScreen.style.display = 'flex';
+        if (chatHeader) chatHeader.style.display = 'none';
+        if (logDiv) logDiv.style.display = 'none';
+        if (inputArea) inputArea.style.display = 'none';
+        if (chatSearchPanel) chatSearchPanel.style.display = 'none';
+    }
+}
+
+// ============================================
+// ======= РЕНДЕР СПИСКА АКТИВНЫХ ЧАТОВ ========
 // ============================================
 
 function renderChatsList() {
@@ -995,7 +1132,6 @@ function renderChatsList() {
         if (chat.lastTime) timeSpan.textContent = formatTime(chat.lastTime);
         top.appendChild(timeSpan);
         
-        // ✅ ИСПРАВЛЕНО: Бейдж непрочитанных из userCache
         if (chat.unreadCount > 0) {
             const unreadBadge = document.createElement("span");
             unreadBadge.className = "user-item-unread";
@@ -1222,10 +1358,12 @@ function enterChat(username) {
     
     initUI();
     
-    const savedLang = localStorage.getItem('synapse_lang') || 'en';
+    const savedLang = localStorage.getItem('amini_lang') || 'en';
     setLanguage(savedLang);
     
     switchTab('chats');
+    
+    updateChatAreaVisibility();
 }
 
 // ============================================
@@ -1255,7 +1393,6 @@ function selectUser(targetId, targetName) {
     document.getElementById('encryptionBtn').style.display = 'flex';
     document.getElementById('chatSearchBtn').style.display = 'flex';
     
-    // ✅ ИСПРАВЛЕНО: Сброс счётчика непрочитанных в userCache
     const data = userCache.get(activeTargetId);
     if (data) {
         data.unreadCount = 0;
@@ -1267,8 +1404,9 @@ function selectUser(targetId, targetName) {
     
     closeChatSearch();
     
-    // Перерисовываем список после сброса счётчика
     renderChatsList();
+    
+    updateChatAreaVisibility();
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "get_pubkey", to: activeTargetId }));
@@ -1450,11 +1588,9 @@ function initWebSocket() {
                 ? localStorage.getItem("username") 
                 : (userCache.get(fromIdStr)?.username || "User");
             
-            // ✅ ИСПРАВЛЕНО: Корректное увеличение счётчика непрочитанных
             if (!isMe) {
                 let partnerData = userCache.get(fromIdStr);
                 
-                // Если пользователя нет в кэше - создаём запись
                 if (!partnerData) {
                     const user = allUsersList.find(u => String(u.id) === fromIdStr);
                     partnerData = {
@@ -1468,12 +1604,10 @@ function initWebSocket() {
                     userCache.set(fromIdStr, partnerData);
                 }
                 
-                // Увеличиваем счётчик только если чат не активен
                 if (fromIdStr !== activeTargetId) {
                     partnerData.unreadCount = (partnerData.unreadCount || 0) + 1;
                 }
                 
-                // Обновляем превью сообщения
                 partnerData.lastMessage = d;
                 partnerData.lastMessageText = text;
                 partnerData.lastTime = d.created_at || Date.now() / 1000;
@@ -1647,6 +1781,8 @@ function logout() {
     document.getElementById('encryptionBtn').style.display = 'none';
     document.getElementById('chatSearchBtn').style.display = 'none';
     
+    updateChatAreaVisibility();
+    
     updateConnectionStatus('connecting');
 }
 
@@ -1655,7 +1791,7 @@ function logout() {
 // ============================================
 
 window.addEventListener('DOMContentLoaded', async () => {
-    const savedLang = localStorage.getItem('synapse_lang') || 'en';
+    const savedLang = localStorage.getItem('amini_lang') || 'en';
     setLanguage(savedLang);
     
     const savedToken = localStorage.getItem("token");

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Synapse — Secure Chat</title>
+    <title>Amini — Secure Chat</title>
     
     <link rel="stylesheet" href="style.css">
     
@@ -17,7 +17,7 @@
 <!-- ============ ЭКРАН АВТОРИЗАЦИИ ============= -->
 <!-- ============================================ -->
 <div id="authScreen">
-    <h2>Synapse</h2>
+    <h2>Amini</h2>
     <input id="authUsername" placeholder="Username" autocomplete="username">
     <input id="authPassword" type="password" placeholder="Password" autocomplete="current-password">
     <div id="authError"></div>
@@ -36,6 +36,7 @@
 <!-- ============================================ -->
 <div id="chatScreen">
     
+    <!-- ================== SIDEBAR ================== -->
     <div class="sidebar">
         
         <div class="status-bar status-connecting" id="statusBar">
@@ -130,7 +131,7 @@
                         </button>
                     </div>
                     <div class="settings-version">
-                        Synapse v1.0 · End-to-End Encrypted
+                        Amini v1.0 · End-to-End Encrypted
                     </div>
                 </div>
             </div>
@@ -152,8 +153,49 @@
         </div>
     </div>
     
+    <!-- ================== CHAT AREA ================== -->
     <div class="chat-area">
-        <div class="chat-header">
+        
+        <!-- WELCOME SCREEN (показывается когда чат не выбран) -->
+        <div class="welcome-screen" id="welcomeScreen">
+            <div class="welcome-icon">💬</div>
+            <h2 class="welcome-title">Amini</h2>
+            <p class="welcome-subtitle" data-i18n="welcome_subtitle">
+                Secure end-to-end encrypted messenger
+            </p>
+            
+            <div class="welcome-actions">
+                <button class="welcome-action-btn" onclick="openThemeSettings()">
+                    <span class="welcome-action-icon">🎨</span>
+                    <div class="welcome-action-text">
+                        <div class="welcome-action-title" data-i18n="welcome_theme">Customize Appearance</div>
+                        <div class="welcome-action-desc" data-i18n="welcome_theme_desc">Themes, colors, dark mode</div>
+                    </div>
+                </button>
+                
+                <button class="welcome-action-btn" onclick="openLanguageSettings()">
+                    <span class="welcome-action-icon">🌐</span>
+                    <div class="welcome-action-text">
+                        <div class="welcome-action-title" data-i18n="welcome_lang">Language</div>
+                        <div class="welcome-action-desc" data-i18n="welcome_lang_desc">English, Русский</div>
+                    </div>
+                </button>
+                
+                <button class="welcome-action-btn" onclick="switchTab('keys')">
+                    <span class="welcome-action-icon">🔐</span>
+                    <div class="welcome-action-text">
+                        <div class="welcome-action-title" data-i18n="welcome_keys">Your Encryption Key</div>
+                        <div class="welcome-action-desc" data-i18n="welcome_keys_desc">Verify your identity</div>
+                    </div>
+                </button>
+            </div>
+            
+            <div class="welcome-hint" data-i18n="welcome_hint">
+                Select a conversation or tap + to start a new one
+            </div>
+        </div>
+        
+        <div class="chat-header" id="chatHeader" style="display:none;">
             <div class="avatar-wrapper" id="chatHeaderAvatarWrapper">
                 <div class="avatar large" id="chatHeaderAvatar"></div>
                 <span class="presence-indicator offline" id="chatHeaderPresence"></span>
@@ -168,7 +210,7 @@
             </div>
         </div>
         
-        <div id="log"></div>
+        <div id="log" style="display:none;"></div>
         
         <div class="chat-search-panel" id="chatSearchPanel" style="display:none;">
             <input type="text" id="chatSearchInput" placeholder="Search in conversation..." data-i18n-placeholder="search_messages">
@@ -180,7 +222,7 @@
             </div>
         </div>
         
-        <div class="input-area">
+        <div class="input-area" id="inputArea" style="display:none;">
             <input id="messageInput" placeholder="Write a message..." onkeydown="if(event.key==='Enter') send()" disabled data-i18n-placeholder="message_placeholder">
             <button id="sendBtn" onclick="send()" disabled>
                 <span data-i18n="send">Send</span>
