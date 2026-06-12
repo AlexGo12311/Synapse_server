@@ -121,20 +121,13 @@ async function decryptMessage(msg, currentUserId) {
         );
 
         return new TextDecoder().decode(plain);
-    } catch {
+    } catch (e) {
+        console.error("Decrypt error:", e);
         return null;
     }
 }
 
-// ============================================
-// ======= НОВОЕ: FINGERPRINT КЛЮЧА ===========
-// ============================================
-
-/**
- * Генерирует отпечаток (fingerprint) публичного ключа.
- * Формат как в Telegram/Signal: группы по 5 символов через пробел.
- * Возвращает { short: "12345 67890...", full: "12345 67890 12345 ..." }
- */
+// ===== FINGERPRINT КЛЮЧА =====
 async function generateKeyFingerprint(pubKeyBase64) {
     if (!pubKeyBase64) return { short: "—", full: "—" };
     
@@ -143,21 +136,19 @@ async function generateKeyFingerprint(pubKeyBase64) {
         const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         
-        // Берём первые 20 байт = 40 hex символов
         const hexString = hashArray.slice(0, 20)
             .map(b => b.toString(16).padStart(2, '0'))
             .join('')
             .toUpperCase();
         
-        // Разбиваем на группы по 5 символов
         const groups = [];
         for (let i = 0; i < hexString.length; i += 5) {
             groups.push(hexString.slice(i, i + 5));
         }
         
         return {
-            short: groups.slice(0, 4).join(' '), // Первые 4 группы для превью
-            full: groups.join(' '),               // Полный fingerprint
+            short: groups.slice(0, 4).join(' '),
+            full: groups.join(' '),
             raw: hexString
         };
     } catch (e) {
@@ -166,21 +157,15 @@ async function generateKeyFingerprint(pubKeyBase64) {
     }
 }
 
-/**
- * Возвращает мой собственный fingerprint
- */
 async function getMyFingerprint() {
     return await generateKeyFingerprint(publicKeyBase64);
 }
 
-/**
- * Возвращает fingerprint собеседника
- */
+// ИСПРАВЛЕНО: используем window.publicKeys вместо локального publicKeys
 async function getPeerFingerprint(peerId) {
-    const peerKey = publicKeys[peerId];
+    const peerKey = window.publicKeys ? window.publicKeys[peerId] : null;
     if (!peerKey) return null;
     
-    // Экспортируем ключ обратно в SPKI для хэширования
     try {
         const spkiBuffer = await crypto.subtle.exportKey("spki", peerKey);
         const pubKeyB64 = toB64(spkiBuffer);
@@ -190,3 +175,17 @@ async function getPeerFingerprint(peerId) {
         return null;
     }
 }
+
+// ===== ГЛОБАЛЬНЫЕ ЭКСПОРТЫ =====
+window.initRSA = initRSA;
+window.encryptDual = encryptDual;
+window.decryptMessage = decryptMessage;
+window.generateMessageId = generateMessageId;
+window.toB64 = toB64;
+window.fromB64 = fromB64;
+window.getMyFingerprint = getMyFingerprint;
+window.getPeerFingerprint = getPeerFingerprint;
+
+Object.defineProperty(window, 'publicKeyBase64', {
+    get: function() { return publicKeyBase64; }
+});
