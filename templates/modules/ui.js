@@ -286,10 +286,14 @@ export function renderChatsList() {
         const avatarWrapper = document.createElement('div');
         avatarWrapper.className = 'avatar-wrapper';
         avatarWrapper.appendChild(createAvatarElement(chat.username));
+        
+        // 🆕 ИСПРАВЛЕНО: берём статус из state.onlineStatuses
         const presenceIndicator = document.createElement("span");
-        presenceIndicator.className = "presence-indicator offline";
+        const isOnline = state.onlineStatuses.get(chat.uid) === 'online';
+        presenceIndicator.className = `presence-indicator ${isOnline ? 'online' : 'offline'}`;
         presenceIndicator.id = `presence-${chat.uid}`;
         avatarWrapper.appendChild(presenceIndicator);
+        
         const content = document.createElement("div");
         content.className = "user-item-content";
         const top = document.createElement("div");
@@ -528,11 +532,13 @@ export function renderNewChatList(query) {
         const avatarWrapper = document.createElement('div');
         avatarWrapper.className = 'avatar-wrapper';
         avatarWrapper.appendChild(createAvatarElement(u.username));
+        
+        // 🆕 ИСПРАВЛЕНО: берём статус из state.onlineStatuses
         const presence = document.createElement('span');
-        presence.className = 'presence-indicator offline';
-        const existingPresence = document.getElementById(`presence-${uIdStr}`);
-        if (existingPresence && existingPresence.classList.contains('online')) presence.className = 'presence-indicator online';
+        const isOnline = state.onlineStatuses.get(uIdStr) === 'online';
+        presence.className = `presence-indicator ${isOnline ? 'online' : 'offline'}`;
         avatarWrapper.appendChild(presence);
+        
         const info = document.createElement('div');
         info.className = 'new-chat-item-info';
         const nameSpan = document.createElement('span');
@@ -603,9 +609,12 @@ export function selectUser(targetId, targetName) {
     document.getElementById("sendBtn").disabled = false;
     const chatHeaderAvatar = document.getElementById("chatHeaderAvatar");
     if (chatHeaderAvatar) updateAvatar(chatHeaderAvatar, targetName);
-    const sourcePresence = document.getElementById(`presence-${state.activeTargetId}`);
+    
+    // 🆕 ИСПРАВЛЕНО: берём статус из state.onlineStatuses
+    const isOnline = state.onlineStatuses.get(state.activeTargetId) === 'online';
     const chatHeaderPresence = document.getElementById("chatHeaderPresence");
-    if (sourcePresence && chatHeaderPresence) chatHeaderPresence.className = `presence-indicator ${sourcePresence.classList.contains('online') ? 'online' : 'offline'}`;
+    if (chatHeaderPresence) chatHeaderPresence.className = `presence-indicator ${isOnline ? 'online' : 'offline'}`;
+    
     document.getElementById('encryptionBtn').style.display = 'flex';
     document.getElementById('chatSearchBtn').style.display = 'flex';
     const data = state.userCache.get(state.activeTargetId);
@@ -663,9 +672,15 @@ export async function loadHistory(target) {
 }
 
 export function updatePresence(uid, status) {
-    const presenceIndicator = document.getElementById(`presence-${String(uid)}`);
+    const uidStr = String(uid);
+    
+    // 🆕 ИСПРАВЛЕНО: сначала обновляем глобальное хранилище
+    state.onlineStatuses.set(uidStr, status);
+    
+    // Потом обновляем DOM элементы если они есть
+    const presenceIndicator = document.getElementById(`presence-${uidStr}`);
     if (presenceIndicator) presenceIndicator.className = `presence-indicator ${status}`;
-    if (String(uid) === state.activeTargetId) {
+    if (uidStr === state.activeTargetId) {
         const chatHeaderPresence = document.getElementById("chatHeaderPresence");
         if (chatHeaderPresence) chatHeaderPresence.className = `presence-indicator ${status}`;
     }

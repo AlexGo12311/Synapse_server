@@ -41,13 +41,21 @@ export function initWebSocket() {
         const d = JSON.parse(e.data);
         
         if (d.type === "online_list") { 
-            if (Array.isArray(d.users)) d.users.forEach(uid => updatePresence(String(uid), "online")); 
+            if (Array.isArray(d.users)) {
+                d.users.forEach(uid => {
+                    const uidStr = String(uid);
+                    state.onlineStatuses.set(uidStr, 'online');  // 🆕
+                    updatePresence(uidStr, "online");
+                });
+            }
             return; 
         }
         
         if (d.type === "user_joined") {
             const userId = String(d.id);
             const username = d.username;
+            
+            state.onlineStatuses.set(userId, 'online');  // 🆕
             
             if (!state.userCache.has(userId)) {
                 state.userCache.set(userId, {
@@ -75,11 +83,17 @@ export function initWebSocket() {
         
         if (d.type === "user_left") {
             const userId = String(d.id);
+            state.onlineStatuses.set(userId, 'offline');  // 🆕
             updatePresence(userId, "offline");
             return;
         }
         
-        if (d.type === "presence") { updatePresence(String(d.user), d.status); return; }
+        if (d.type === "presence") { 
+            const userId = String(d.user);
+            state.onlineStatuses.set(userId, d.status);  // 🆕
+            updatePresence(userId, d.status); 
+            return; 
+        }
         
         if (d.type === "message_saved") { updateMessageStatus(String(d.id), "sent"); return; }
         
@@ -189,7 +203,6 @@ export async function sendQueuedMessage(text, target) {
     }));
     logMessage(messageId, text, "me", formatTime(), "sent", localStorage.getItem("username"));
     
-    // 🆕 Обновляем userCache чтобы чат появился в списке
     let partnerData = state.userCache.get(target);
     if (!partnerData) {
         const user = state.allUsersList.find(u => String(u.id) === target);
@@ -235,7 +248,6 @@ export async function send() {
     
     logMessage(messageId, text, "me", formatTime(), "sent", localStorage.getItem("username"), state.replyingTo ? state.replyingTo.id : null);
     
-    // 🆕 Обновляем userCache чтобы чат появился в списке сразу
     let partnerData = state.userCache.get(target);
     if (!partnerData) {
         const user = state.allUsersList.find(u => String(u.id) === target);

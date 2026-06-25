@@ -23,7 +23,8 @@ export const state = {
     isTyping: false,
     peerTypingTimer: null,
     replyingTo: null,
-    messagesMap: new Map()
+    messagesMap: new Map(),
+    onlineStatuses: new Map()  // 🆕 userId -> 'online'|'offline'
 };
 
 export const constants = {
@@ -53,5 +54,4 @@ export const THEMES = [
     { name: "Classic", wallpaper: "linear-gradient(135deg, #ECE9E6 0%, #FFFFFF 100%)", wallpaperDark: "linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%)", accent: "#007BFF", accentHover: "#0056B3", bubbleMe: "#D9FDD3", bubbleMeDark: "#2b5278", surfaceLight: { main: "#f8f9fa", container: "#ffffff", header: "#f1f3f5", input: "#ffffff", hover: "#f4f5f7", border: "#dee2e6" }, surfaceDark: { main: "#0e1621", container: "#17212b", header: "#242f3d", input: "#242f3d", hover: "#2b3a4a", border: "#0c1621" } }
 ];
 
-// Делаем publicKeys доступным глобально для crypto.js
 window.publicKeys = state.publicKeys;
