@@ -18,11 +18,13 @@ export function initWebSocket() {
     if (state.ws && (state.ws.readyState === WebSocket.CONNECTING || state.ws.readyState === WebSocket.OPEN)) return;
     if (state.wsReconnectAttempts === 0) updateConnectionStatus('connecting');
     state.ws = new WebSocket(`ws://localhost:8080/ws?token=${state.token}`);
+    
     state.ws.onopen = () => { 
         state.wsReconnectAttempts = 0; 
         updateConnectionStatus('connected'); 
         state.ws.send(JSON.stringify({ type: "set_pubkey", pubKey: window.publicKeyBase64 })); 
     };
+    
     state.ws.onclose = () => {
         if (!state.token) return;
         state.wsReconnectAttempts++;
@@ -32,15 +34,61 @@ export function initWebSocket() {
             state.wsReconnectTimer = setTimeout(initWebSocket, delay);
         } else updateConnectionStatus('disconnected');
     };
+    
     state.ws.onerror = () => { if (state.wsReconnectAttempts === 0) updateConnectionStatus('reconnecting'); };
+    
     state.ws.onmessage = async (e) => {
         const d = JSON.parse(e.data);
-        if (d.type === "online_list") { if (Array.isArray(d.users)) d.users.forEach(uid => updatePresence(String(uid), "online")); return; }
+        
+        if (d.type === "online_list") { 
+            if (Array.isArray(d.users)) d.users.forEach(uid => updatePresence(String(uid), "online")); 
+            return; 
+        }
+        
+        if (d.type === "user_joined") {
+            const userId = String(d.id);
+            const username = d.username;
+            
+            if (!state.userCache.has(userId)) {
+                state.userCache.set(userId, {
+                    username: username,
+                    lastMessage: null,
+                    lastMessageText: null,
+                    lastTime: null,
+                    lastFromMe: false,
+                    unreadCount: 0
+                });
+            }
+            
+            const existsInList = state.allUsersList.find(u => String(u.id) === userId);
+            if (!existsInList) {
+                state.allUsersList.push({ id: userId, username: username });
+            }
+            
+            updatePresence(userId, "online");
+            
+            if (state.currentTab === 'chats') {
+                renderChatsList();
+            }
+            return;
+        }
+        
+        if (d.type === "user_left") {
+            const userId = String(d.id);
+            updatePresence(userId, "offline");
+            return;
+        }
+        
         if (d.type === "presence") { updatePresence(String(d.user), d.status); return; }
+        
         if (d.type === "message_saved") { updateMessageStatus(String(d.id), "sent"); return; }
+        
         if (d.type === "status_update") { updateMessageStatus(String(d.id), d.status); return; }
+        
         if (d.type === "typing") { if (String(d.from) === state.activeTargetId) showPeerTyping(); return; }
+        
         if (d.type === "stop_typing") { if (String(d.from) === state.activeTargetId) hidePeerTyping(); return; }
+        
         if (d.type === "pubkey") {
             state.publicKeys[d.from] = await crypto.subtle.importKey("spki", window.fromB64(d.pubKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
             flushPendingReads(d.from);
@@ -52,21 +100,32 @@ export function initWebSocket() {
             }
             return;
         }
+        
         if (d.type === "message") {
             const msgIdStr = String(d.id);
             if (state.shownMessages.has(msgIdStr)) return;
             state.shownMessages.add(msgIdStr);
+            
             const text = await window.decryptMessage(d, state.userId);
             const fromIdStr = String(d.from);
             const isMe = fromIdStr === state.userId;
             const fromUsername = isMe ? localStorage.getItem("username") : (state.userCache.get(fromIdStr)?.username || "User");
             const replyToId = d.reply_to || null;
+            
             if (!isMe && fromIdStr === state.activeTargetId) hidePeerTyping();
+            
             if (!isMe) {
                 let partnerData = state.userCache.get(fromIdStr);
                 if (!partnerData) {
                     const user = state.allUsersList.find(u => String(u.id) === fromIdStr);
-                    partnerData = { username: user?.username || fromUsername || "Unknown", lastMessage: null, lastMessageText: null, lastTime: null, lastFromMe: false, unreadCount: 0 };
+                    partnerData = { 
+                        username: user?.username || fromUsername || "Unknown", 
+                        lastMessage: null, 
+                        lastMessageText: null, 
+                        lastTime: null, 
+                        lastFromMe: false, 
+                        unreadCount: 0 
+                    };
                     state.userCache.set(fromIdStr, partnerData);
                 }
                 if (fromIdStr !== state.activeTargetId) partnerData.unreadCount = (partnerData.unreadCount || 0) + 1;
@@ -81,7 +140,14 @@ export function initWebSocket() {
                 let partnerData = state.userCache.get(toId);
                 if (!partnerData) {
                     const user = state.allUsersList.find(u => String(u.id) === toId);
-                    partnerData = { username: user?.username || "Unknown", lastMessage: null, lastMessageText: null, lastTime: null, lastFromMe: false, unreadCount: 0 };
+                    partnerData = { 
+                        username: user?.username || "Unknown", 
+                        lastMessage: null, 
+                        lastMessageText: null, 
+                        lastTime: null, 
+                        lastFromMe: false, 
+                        unreadCount: 0 
+                    };
                     state.userCache.set(toId, partnerData);
                 }
                 partnerData.lastMessage = d;
@@ -91,13 +157,21 @@ export function initWebSocket() {
                 state.userCache.set(toId, partnerData);
                 renderChatsList();
             }
+            
             if (fromIdStr === state.activeTargetId || (isMe && String(d.to) === state.activeTargetId)) {
                 if (text) {
                     logMessage(msgIdStr, text, isMe ? "me" : "other", formatTime(d.timestamp || d.created_at || null), "sent", fromUsername, replyToId);
                     if (!isMe) markAsRead(msgIdStr, fromIdStr);
                 } else if (!isMe) markAsRead(msgIdStr, fromIdStr);
             } else {
-                if (!isMe && state.ws && state.ws.readyState === WebSocket.OPEN) state.ws.send(JSON.stringify({ type: "status_update", id: msgIdStr, to: fromIdStr, status: "delivered" }));
+                if (!isMe && state.ws && state.ws.readyState === WebSocket.OPEN) {
+                    state.ws.send(JSON.stringify({ 
+                        type: "status_update", 
+                        id: msgIdStr, 
+                        to: fromIdStr, 
+                        status: "delivered" 
+                    }));
+                }
             }
         }
     };
@@ -107,8 +181,34 @@ export async function sendQueuedMessage(text, target) {
     const encrypted = await window.encryptDual(text, state.publicKeys[target]);
     const messageId = window.generateMessageId();
     state.shownMessages.add(messageId);
-    state.ws.send(JSON.stringify({ id: messageId, type: "message", to: String(target), ...encrypted }));
+    state.ws.send(JSON.stringify({ 
+        id: messageId, 
+        type: "message", 
+        to: String(target), 
+        ...encrypted 
+    }));
     logMessage(messageId, text, "me", formatTime(), "sent", localStorage.getItem("username"));
+    
+    // 🆕 Обновляем userCache чтобы чат появился в списке
+    let partnerData = state.userCache.get(target);
+    if (!partnerData) {
+        const user = state.allUsersList.find(u => String(u.id) === target);
+        partnerData = { 
+            username: user?.username || "Unknown", 
+            lastMessage: { id: messageId, from: state.userId, to: target, created_at: Date.now() / 1000 }, 
+            lastMessageText: text, 
+            lastTime: Date.now() / 1000, 
+            lastFromMe: true, 
+            unreadCount: 0 
+        };
+        state.userCache.set(target, partnerData);
+    } else {
+        partnerData.lastMessage = { id: messageId, from: state.userId, to: target, created_at: Date.now() / 1000 };
+        partnerData.lastMessageText = text;
+        partnerData.lastTime = Date.now() / 1000;
+        partnerData.lastFromMe = true;
+    }
+    renderChatsList();
 }
 
 export async function send() {
@@ -116,6 +216,7 @@ export async function send() {
     const text = messageInput.value.trim();
     const target = state.activeTargetId;
     if (!text || !target) return;
+    
     if (!state.publicKeys[target]) {
         if (!state.pendingMessages[target]) state.pendingMessages[target] = [];
         state.pendingMessages[target].push(text);
@@ -123,18 +224,46 @@ export async function send() {
         messageInput.value = "";
         return;
     }
+    
     const encrypted = await window.encryptDual(text, state.publicKeys[target]);
     const messageId = window.generateMessageId();
     state.shownMessages.add(messageId);
+    
     const payload = { id: messageId, type: "message", to: String(target), ...encrypted };
     if (state.replyingTo) payload.reply_to = state.replyingTo.id;
     state.ws.send(JSON.stringify(payload));
+    
     logMessage(messageId, text, "me", formatTime(), "sent", localStorage.getItem("username"), state.replyingTo ? state.replyingTo.id : null);
+    
+    // 🆕 Обновляем userCache чтобы чат появился в списке сразу
+    let partnerData = state.userCache.get(target);
+    if (!partnerData) {
+        const user = state.allUsersList.find(u => String(u.id) === target);
+        partnerData = { 
+            username: user?.username || state.activeTargetName || "Unknown", 
+            lastMessage: { id: messageId, from: state.userId, to: target, created_at: Date.now() / 1000 }, 
+            lastMessageText: text, 
+            lastTime: Date.now() / 1000, 
+            lastFromMe: true, 
+            unreadCount: 0 
+        };
+        state.userCache.set(target, partnerData);
+    } else {
+        partnerData.lastMessage = { id: messageId, from: state.userId, to: target, created_at: Date.now() / 1000 };
+        partnerData.lastMessageText = text;
+        partnerData.lastTime = Date.now() / 1000;
+        partnerData.lastFromMe = true;
+    }
+    renderChatsList();
+    
     state.replyingTo = null;
     const preview = document.getElementById('replyPreview');
     if (preview) preview.style.display = 'none';
+    
     messageInput.value = "";
     if (state.typingTimer) clearTimeout(state.typingTimer);
     state.isTyping = false;
-    if (state.ws && state.ws.readyState === WebSocket.OPEN) state.ws.send(JSON.stringify({ type: "stop_typing", to: target }));
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify({ type: "stop_typing", to: target }));
+    }
 }

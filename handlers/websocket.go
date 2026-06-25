@@ -38,12 +38,29 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 🆕 Получаем username для broadcast
+	username, err := s.store.GetUserByID(userID)
+	if err != nil {
+		log.Println("Failed to get username for broadcast:", err)
+		username = ""
+	}
+
+	client := models.Client{
+		ID:   userID,
+		Conn: ws,
+	}
+
 	defer func() {
 		s.hub.Mutex.Lock()
 		delete(s.hub.Clients, userID)
 
 		for id, c := range s.hub.Clients {
 			if id != userID {
+				// 🆕 Уведомляем что пользователь вышел
+				c.Conn.WriteJSON(map[string]interface{}{
+					"type": "user_left",
+					"id":   userID,
+				})
 				c.Conn.WriteJSON(map[string]interface{}{
 					"type":   "presence",
 					"user":   userID,
@@ -56,11 +73,6 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 		ws.Close()
 		log.Println("User disconnected:", userID)
 	}()
-
-	client := models.Client{
-		ID:   userID,
-		Conn: ws,
-	}
 
 	s.hub.Mutex.Lock()
 	s.hub.Clients[userID] = &client
@@ -75,6 +87,7 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("User connected:", userID)
 
+	// Отправляем новому пользователю список онлайн-пользователей
 	ws.WriteJSON(map[string]interface{}{
 		"type":  "online_list",
 		"users": onlineUsers,
@@ -83,6 +96,13 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	s.hub.Mutex.Lock()
 	for id, c := range s.hub.Clients {
 		if id != userID {
+			// 🆕 Уведомляем о новом пользователе
+			c.Conn.WriteJSON(map[string]interface{}{
+				"type":     "user_joined",
+				"id":       userID,
+				"username": username,
+			})
+			// Уведомляем о presence
 			c.Conn.WriteJSON(map[string]interface{}{
 				"type":   "presence",
 				"user":   userID,

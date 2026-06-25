@@ -128,3 +128,13 @@ func (s *Storage) GetAllUsers() ([]models.User, error) {
 
 	return users, nil
 }
+
+func (s *Storage) GetUserByID(userID string) (string, error) {
+	var username string
+	err := s.db.DB.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
+	if err != nil {
+		log.Println("GetUserByID error:", err)
+		return "", err
+	}
+	return username, nil
+}
