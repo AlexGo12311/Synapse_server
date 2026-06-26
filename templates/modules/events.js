@@ -7,6 +7,7 @@ import {
     switchTab, 
     initUI,
     loadUsersList,
+    loadUnreadCountsFromServer,
     updateChatAreaVisibility,
     cancelReply,
     closeChatSearch,
@@ -47,6 +48,10 @@ export async function login() {
         const keyStatus = await window.initRSA(state.userId);
         logMessage(null, keyStatus === 'loaded' ? t('keys_loaded') : t('keys_generated'), "system");
         await loadUsersList();
+        
+        // 🆕 Загружаем РЕАЛЬНОЕ количество непрочитанных с сервера
+        await loadUnreadCountsFromServer();
+        
         initWebSocket();
     } catch (err) { authErrorDiv.innerText = t('server_error'); }
 }
@@ -116,6 +121,10 @@ export async function initApp() {
                 const keyStatus = await window.initRSA(state.userId);
                 logMessage(null, keyStatus === 'loaded' ? t('keys_loaded') : t('keys_generated'), "system");
                 await loadUsersList();
+                
+                // 🆕 Загружаем РЕАЛЬНОЕ количество непрочитанных с сервера
+                await loadUnreadCountsFromServer();
+                
                 initWebSocket();
             } else {
                 localStorage.removeItem("token");

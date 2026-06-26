@@ -56,6 +56,7 @@ func main() {
 	mux.Handle("/history", auth.AuthMiddleware(http.HandlerFunc(server.GetHistory)))
 	mux.Handle("/users", auth.AuthMiddleware(http.HandlerFunc(server.GetUsers)))
 	mux.Handle("/last-messages", auth.AuthMiddleware(http.HandlerFunc(server.GetLastMessages)))
+	mux.Handle("/unread-counts", auth.AuthMiddleware(http.HandlerFunc(server.GetUnreadCounts)))
 
 	log.Println("🚀 Server running on :8080")
 	http.ListenAndServe(":8080", enableCORS(mux))

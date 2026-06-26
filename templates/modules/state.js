@@ -24,7 +24,7 @@ export const state = {
     peerTypingTimer: null,
     replyingTo: null,
     messagesMap: new Map(),
-    onlineStatuses: new Map()  // 🆕 userId -> 'online'|'offline'
+    onlineStatuses: new Map()
 };
 
 export const constants = {
@@ -55,3 +55,42 @@ export const THEMES = [
 ];
 
 window.publicKeys = state.publicKeys;
+
+// 🆕 Функции для работы с unreadCount в localStorage
+export function saveUnreadCounts() {
+    const unreadMap = {};
+    state.userCache.forEach((data, uid) => {
+        if (data.unreadCount > 0) {
+            unreadMap[uid] = data.unreadCount;
+        }
+    });
+    try {
+        localStorage.setItem(`unreadCounts_${state.userId}`, JSON.stringify(unreadMap));
+    } catch (e) {
+        console.error('Failed to save unread counts:', e);
+    }
+}
+
+export function loadUnreadCounts() {
+    try {
+        const saved = localStorage.getItem(`unreadCounts_${state.userId}`);
+        if (!saved) return;
+        const unreadMap = JSON.parse(saved);
+        for (const [uid, count] of Object.entries(unreadMap)) {
+            const data = state.userCache.get(uid);
+            if (data) {
+                data.unreadCount = count;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load unread counts:', e);
+    }
+}
+
+export function clearUnreadCount(uid) {
+    const data = state.userCache.get(uid);
+    if (data) {
+        data.unreadCount = 0;
+        saveUnreadCounts();
+    }
+}

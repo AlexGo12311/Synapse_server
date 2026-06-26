@@ -1,4 +1,4 @@
-import { state, constants } from './state.js';
+import { state, constants, saveUnreadCounts } from './state.js';
 import { t } from './i18n.js';
 import { formatTime } from './utils.js';
 import { 
@@ -44,7 +44,7 @@ export function initWebSocket() {
             if (Array.isArray(d.users)) {
                 d.users.forEach(uid => {
                     const uidStr = String(uid);
-                    state.onlineStatuses.set(uidStr, 'online');  // 🆕
+                    state.onlineStatuses.set(uidStr, 'online');
                     updatePresence(uidStr, "online");
                 });
             }
@@ -55,7 +55,7 @@ export function initWebSocket() {
             const userId = String(d.id);
             const username = d.username;
             
-            state.onlineStatuses.set(userId, 'online');  // 🆕
+            state.onlineStatuses.set(userId, 'online');
             
             if (!state.userCache.has(userId)) {
                 state.userCache.set(userId, {
@@ -83,14 +83,14 @@ export function initWebSocket() {
         
         if (d.type === "user_left") {
             const userId = String(d.id);
-            state.onlineStatuses.set(userId, 'offline');  // 🆕
+            state.onlineStatuses.set(userId, 'offline');
             updatePresence(userId, "offline");
             return;
         }
         
         if (d.type === "presence") { 
             const userId = String(d.user);
-            state.onlineStatuses.set(userId, d.status);  // 🆕
+            state.onlineStatuses.set(userId, d.status);
             updatePresence(userId, d.status); 
             return; 
         }
@@ -142,7 +142,13 @@ export function initWebSocket() {
                     };
                     state.userCache.set(fromIdStr, partnerData);
                 }
-                if (fromIdStr !== state.activeTargetId) partnerData.unreadCount = (partnerData.unreadCount || 0) + 1;
+                
+                // 🆕 Увеличиваем счётчик только если чат не открыт
+                if (fromIdStr !== state.activeTargetId) {
+                    partnerData.unreadCount = (partnerData.unreadCount || 0) + 1;
+                    saveUnreadCounts();  // 🆕 Сохраняем в localStorage
+                }
+                
                 partnerData.lastMessage = d;
                 partnerData.lastMessageText = text;
                 partnerData.lastTime = d.created_at || Date.now() / 1000;

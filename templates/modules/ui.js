@@ -1,4 +1,4 @@
-import { state, constants } from './state.js';
+import { state, constants, saveUnreadCounts } from './state.js';
 import { t } from './i18n.js';
 import { formatTime, createAvatarElement, updateAvatar, xorHexStrings, getLogDiv } from './utils.js';
 import { attachSwipeToMessage } from './swipe.js';
@@ -287,7 +287,6 @@ export function renderChatsList() {
         avatarWrapper.className = 'avatar-wrapper';
         avatarWrapper.appendChild(createAvatarElement(chat.username));
         
-        // 🆕 ИСПРАВЛЕНО: берём статус из state.onlineStatuses
         const presenceIndicator = document.createElement("span");
         const isOnline = state.onlineStatuses.get(chat.uid) === 'online';
         presenceIndicator.className = `presence-indicator ${isOnline ? 'online' : 'offline'}`;
@@ -361,15 +360,63 @@ export async function loadLastMessages() {
         if (!res.ok) return;
         const messages = await res.json();
         if (!Array.isArray(messages)) return;
+        
         for (const msg of messages) {
             const partnerId = String(msg.partner_id);
-            const partner = state.userCache.get(partnerId);
-            if (!partner) continue;
+            let partner = state.userCache.get(partnerId);
+            
+            if (!partner) {
+                partner = {
+                    username: "Unknown",
+                    lastMessage: null,
+                    lastMessageText: null,
+                    lastTime: null,
+                    lastFromMe: false,
+                    unreadCount: 0
+                };
+            }
+            
             const decrypted = await window.decryptMessage(msg, state.userId);
-            state.userCache.set(partnerId, { ...partner, lastMessage: msg, lastMessageText: decrypted, lastTime: msg.created_at, lastFromMe: String(msg.from) === state.userId });
+            const isFromMe = String(msg.from) === state.userId;
+            
+            partner.lastMessage = msg;
+            partner.lastMessageText = decrypted;
+            partner.lastTime = msg.created_at;
+            partner.lastFromMe = isFromMe;
+            
+            state.userCache.set(partnerId, partner);
         }
+        
         renderChatsList();
-    } catch (e) { console.log("Failed to load last messages:", e); }
+    } catch (e) { 
+        console.log("Failed to load last messages:", e); 
+    }
+}
+
+// 🆕 НОВАЯ ФУНКЦИЯ: загружает РЕАЛЬНОЕ количество непрочитанных с сервера
+export async function loadUnreadCountsFromServer() {
+    try {
+        const res = await fetch("http://localhost:8080/unread-counts", { 
+            headers: { "Authorization": "Bearer " + state.token } 
+        });
+        if (!res.ok) return;
+        const counts = await res.json();
+        
+        // counts это объект вида { "user_id_1": 3, "user_id_2": 1 }
+        for (const [partnerId, count] of Object.entries(counts)) {
+            const partner = state.userCache.get(partnerId);
+            if (partner) {
+                partner.unreadCount = count;
+            }
+        }
+        
+        // Сохраняем в localStorage
+        saveUnreadCounts();
+        
+        renderChatsList();
+    } catch (e) { 
+        console.log("Failed to load unread counts:", e); 
+    }
 }
 
 export function markAsRead(msgId, fromId) {
@@ -533,7 +580,6 @@ export function renderNewChatList(query) {
         avatarWrapper.className = 'avatar-wrapper';
         avatarWrapper.appendChild(createAvatarElement(u.username));
         
-        // 🆕 ИСПРАВЛЕНО: берём статус из state.onlineStatuses
         const presence = document.createElement('span');
         const isOnline = state.onlineStatuses.get(uIdStr) === 'online';
         presence.className = `presence-indicator ${isOnline ? 'online' : 'offline'}`;
@@ -610,15 +656,20 @@ export function selectUser(targetId, targetName) {
     const chatHeaderAvatar = document.getElementById("chatHeaderAvatar");
     if (chatHeaderAvatar) updateAvatar(chatHeaderAvatar, targetName);
     
-    // 🆕 ИСПРАВЛЕНО: берём статус из state.onlineStatuses
     const isOnline = state.onlineStatuses.get(state.activeTargetId) === 'online';
     const chatHeaderPresence = document.getElementById("chatHeaderPresence");
     if (chatHeaderPresence) chatHeaderPresence.className = `presence-indicator ${isOnline ? 'online' : 'offline'}`;
     
     document.getElementById('encryptionBtn').style.display = 'flex';
     document.getElementById('chatSearchBtn').style.display = 'flex';
+    
+    // Сбрасываем счётчик и сохраняем в localStorage
     const data = state.userCache.get(state.activeTargetId);
-    if (data) data.unreadCount = 0;
+    if (data && data.unreadCount > 0) {
+        data.unreadCount = 0;
+        saveUnreadCounts();
+    }
+    
     getLogDiv().innerHTML = "";
     state.shownMessages.clear();
     state.shownKeyExchanges.clear();
@@ -673,11 +724,7 @@ export async function loadHistory(target) {
 
 export function updatePresence(uid, status) {
     const uidStr = String(uid);
-    
-    // 🆕 ИСПРАВЛЕНО: сначала обновляем глобальное хранилище
     state.onlineStatuses.set(uidStr, status);
-    
-    // Потом обновляем DOM элементы если они есть
     const presenceIndicator = document.getElementById(`presence-${uidStr}`);
     if (presenceIndicator) presenceIndicator.className = `presence-indicator ${status}`;
     if (uidStr === state.activeTargetId) {

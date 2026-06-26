@@ -177,3 +177,36 @@ func (s *Storage) GetLastMessages(userID string) ([]LastMessage, error) {
 
 	return results, nil
 }
+
+// GetUnreadCounts возвращает количество непрочитанных сообщений для каждого собеседника
+func (s *Storage) GetUnreadCounts(userID string) (map[string]int, error) {
+	query := `
+		SELECT sender, COUNT(*)
+		FROM messages
+		WHERE receiver = ? AND status != 'read'
+		GROUP BY sender
+	`
+
+	rows, err := s.db.DB.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var partnerID string
+		var count int
+		if err := rows.Scan(&partnerID, &count); err != nil {
+			continue
+		}
+		counts[partnerID] = count
+	}
+
+	// Добавляем проверку для консистентности с другими функциями
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return counts, nil
+}
