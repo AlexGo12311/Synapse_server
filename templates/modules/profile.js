@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { t } from './i18n.js';
 import { hashStringToColor, getInitials } from './utils.js';
 
 // Элементы чата которые нужно скрывать
@@ -38,7 +39,7 @@ export async function openProfile(userId) {
         // Username
         document.getElementById('profileUsername').textContent = profile.username;
         
-        // 🆕 Bio: показываем секцию только если bio не пустое
+        // Bio: показываем секцию только если bio не пустое
         const bioField = document.getElementById('profileBioField');
         const bioEl = document.getElementById('profileBio');
         const bioEdit = document.getElementById('profileBioEdit');
@@ -59,25 +60,19 @@ export async function openProfile(userId) {
             bioEdit.style.display = 'none';
         }
         
-        // Кнопки редактирования только для своего профиля и только если bio не пустое
+        // Кнопки редактирования только для своего профиля
         const isMyProfile = userId === state.userId;
         const editBtn = document.getElementById('profileEditBtn');
         const saveBtn = document.getElementById('profileSaveBtn');
         const cancelBtn = document.getElementById('profileCancelBtn');
         
+        // 🆕 Используем t() для локализованного текста
         if (editBtn) {
-            editBtn.style.display = (isMyProfile && hasBio) ? 'block' : 'none';
+            editBtn.style.display = isMyProfile ? 'block' : 'none';
+            editBtn.textContent = hasBio ? t('edit_bio') : t('add_bio');
         }
         if (saveBtn) saveBtn.style.display = 'none';
         if (cancelBtn) cancelBtn.style.display = 'none';
-        
-        // Для своего профиля без bio — показываем Edit чтобы можно было добавить
-        if (isMyProfile && !hasBio && editBtn) {
-            editBtn.style.display = 'block';
-            editBtn.textContent = '✏️ Add Bio';
-        } else if (isMyProfile && editBtn) {
-            editBtn.textContent = '✏️ Edit Bio';
-        }
         
         // Сохраняем ID текущего профиля
         profileView.dataset.profileUserId = userId;
@@ -95,12 +90,10 @@ export function closeProfile() {
     
     // Возвращаем чат обратно
     if (state.activeTargetId) {
-        // Если был открыт чат — показываем элементы чата
         document.getElementById('chatHeader').style.display = 'flex';
         document.getElementById('log').style.display = 'flex';
         document.getElementById('inputArea').style.display = 'flex';
     } else {
-        // Если чат не был открыт — показываем welcome screen
         document.getElementById('welcomeScreen').style.display = 'flex';
     }
 }
@@ -113,7 +106,6 @@ export function startEditBio() {
     const saveBtn = document.getElementById('profileSaveBtn');
     const cancelBtn = document.getElementById('profileCancelBtn');
     
-    // Показываем поле bio при редактировании, даже если оно было пустым
     if (bioField) bioField.style.display = 'block';
     if (bioEl) bioEl.style.display = 'none';
     if (bioEdit) {

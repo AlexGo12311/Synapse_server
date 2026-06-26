@@ -31,7 +31,17 @@ const I18N = {
         welcome_lang: "Language", welcome_lang_desc: "English, Русский",
         welcome_keys: "Your Encryption Key", welcome_keys_desc: "Verify your identity",
         welcome_hint: "Select a conversation or tap + to start a new one",
-        typing: "typing", reply_to: "Reply to"
+        typing: "typing", reply_to: "Reply to",
+        // 🆕 Профиль
+        profile: "Profile",
+        username: "Username",
+        bio: "Bio",
+        edit: "✏️ Edit",
+        edit_bio: "✏️ Edit Bio",
+        add_bio: "✏️ Add Bio",
+        save: "💾 Save",
+        cancel: "✖ Cancel",
+        bio_placeholder: "Write something about yourself..."
     },
     ru: {
         login: "Войти", register: "Регистрация", send: "Отправить", settings: "🎨 Настройки",
@@ -65,7 +75,17 @@ const I18N = {
         welcome_lang: "Язык интерфейса", welcome_lang_desc: "English, Русский",
         welcome_keys: "Ваш ключ шифрования", welcome_keys_desc: "Подтвердите свою личность",
         welcome_hint: "Выберите диалог или нажмите + чтобы начать новый",
-        typing: "печатает", reply_to: "Ответ"
+        typing: "печатает", reply_to: "Ответ",
+        // 🆕 Профиль
+        profile: "Профиль",
+        username: "Имя пользователя",
+        bio: "О себе",
+        edit: "✏️ Редактировать",
+        edit_bio: "✏️ Редактировать",
+        add_bio: "✏️ Добавить",
+        save: "💾 Сохранить",
+        cancel: "✖ Отмена",
+        bio_placeholder: "Расскажите что-нибудь о себе..."
     }
 };
 
@@ -94,4 +114,17 @@ export function setLanguage(lang) {
     document.querySelectorAll('.lang-option').forEach(btn => 
         btn.classList.toggle('active', btn.dataset.lang === lang)
     );
+    
+    // 🆕 Обновляем текст кнопок профиля если они видны
+    const editBtn = document.getElementById('profileEditBtn');
+    if (editBtn && editBtn.style.display !== 'none') {
+        const profileView = document.getElementById('profileView');
+        const userId = profileView?.dataset.profileUserId;
+        const bioEl = document.getElementById('profileBio');
+        const hasBio = bioEl && bioEl.textContent.trim() !== '';
+        
+        if (userId === state.userId) {
+            editBtn.textContent = hasBio ? t('edit_bio') : t('add_bio');
+        }
+    }
 }
