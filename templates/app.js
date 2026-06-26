@@ -1,3 +1,6 @@
+// ============================================
+// ===== ИМПОРТЫ (ВСЕ ДОЛЖНЫ БЫТЬ ВВЕРХУ) =====
+// ============================================
 import { setLanguage } from './modules/i18n.js';
 import { 
     switchTab, 
@@ -19,8 +22,11 @@ import {
 import { register, login, logout, initApp } from './modules/events.js';
 import { send } from './modules/websocket.js';
 import { setThemeMode } from './modules/themes.js';
+import { openProfile, closeProfile, initProfile } from './modules/profile.js';
 
-// Делаем функции глобальными для HTML onclick
+// ============================================
+// === ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ HTML onclick ===
+// ============================================
 window.register = register;
 window.login = login;
 window.logout = logout;
@@ -43,8 +49,19 @@ window.setLanguage = setLanguage;
 window.chatSearchNext = chatSearchNext;
 window.chatSearchPrev = chatSearchPrev;
 
+// 🆕 Функции профиля
+window.openProfileFn = openProfile;
+window.closeProfileFn = closeProfile;
+
+// ============================================
+// ========== ОБРАБОТЧИКИ СОБЫТИЙ ============
+// ============================================
+
 // Предотвращаем submit формы
 document.addEventListener('submit', (e) => e.preventDefault());
 
 // Инициализация при загрузке
-window.addEventListener('DOMContentLoaded', initApp);
+window.addEventListener('DOMContentLoaded', () => {
+    initApp();
+    initProfile();
+});

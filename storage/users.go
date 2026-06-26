@@ -138,3 +138,30 @@ func (s *Storage) GetUserByID(userID string) (string, error) {
 	}
 	return username, nil
 }
+
+// GetProfile возвращает профиль пользователя (username + bio)
+func (s *Storage) GetProfile(userID string) (username string, bio string, err error) {
+	err = s.db.DB.QueryRow(`
+		SELECT username, COALESCE(bio, '') 
+		FROM users 
+		WHERE id = ?
+	`, userID).Scan(&username, &bio)
+	return
+}
+
+// UpdateBio обновляет био пользователя
+func (s *Storage) UpdateBio(userID string, bio string) error {
+	// Ограничиваем длину био
+	if len(bio) > 500 {
+		bio = bio[:500]
+	}
+
+	_, err := s.db.DB.Exec(`
+		UPDATE users SET bio = ? WHERE id = ?
+	`, bio, userID)
+
+	if err != nil {
+		log.Println("❌ UpdateBio error:", err)
+	}
+	return err
+}

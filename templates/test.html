@@ -237,6 +237,41 @@
                 <span>➤</span>
             </button>
         </div>
+        
+        <!-- ============================================ -->
+        <!-- ========= ПРОСМОТР ПРОФИЛЯ (INLINE) ========= -->
+        <!-- ============================================ -->
+        <div class="profile-view" id="profileView" style="display:none;">
+            <div class="profile-view-header">
+                <button class="profile-back-btn" id="profileBackBtn" title="Back to chat">
+                    <span>←</span>
+                </button>
+                <div class="profile-view-title">
+                    <span data-i18n="profile">Profile</span>
+                </div>
+            </div>
+            <div class="profile-view-body">
+                <div class="profile-avatar-section">
+                    <div class="profile-avatar" id="profileAvatar"></div>
+                </div>
+                <div class="profile-info">
+                    <div class="profile-field">
+                        <label class="profile-label" data-i18n="username">Username</label>
+                        <div class="profile-value" id="profileUsername"></div>
+                    </div>
+                    <div class="profile-field" id="profileBioField" style="display:none;">
+                        <label class="profile-label" data-i18n="bio">Bio</label>
+                        <div class="profile-value bio-value" id="profileBio"></div>
+                        <textarea class="profile-bio-edit" id="profileBioEdit" maxlength="500" placeholder="Write something about yourself..." style="display:none;"></textarea>
+                    </div>
+                    <div class="profile-actions" id="profileActions">
+                        <button class="profile-btn" id="profileEditBtn" style="display:none;" data-i18n="edit">✏️ Edit Bio</button>
+                        <button class="profile-btn primary" id="profileSaveBtn" style="display:none;" data-i18n="save">💾 Save</button>
+                        <button class="profile-btn" id="profileCancelBtn" style="display:none;" data-i18n="cancel">✖ Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
