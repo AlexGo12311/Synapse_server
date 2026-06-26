@@ -112,6 +112,32 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	s.hub.Mutex.Unlock()
 
+	// 🆕 ПОМЕЧАЕМ ВСЕ НЕДОСТАВЛЕННЫЕ СООБЩЕНИЯ КАК DELIVERED
+	deliveries, err := s.store.MarkAsDelivered(userID)
+	if err != nil {
+		log.Println("MarkAsDelivered error:", err)
+	} else {
+		// Уведомляем отправителей что их сообщения доставлены
+		s.hub.Mutex.Lock()
+		for senderID, msgIDs := range deliveries {
+			if senderClient, ok := s.hub.Clients[senderID]; ok {
+				for _, msgID := range msgIDs {
+					senderClient.Conn.WriteJSON(map[string]interface{}{
+						"type":   "status_update",
+						"id":     msgID,
+						"status": "delivered",
+						"from":   userID,
+					})
+				}
+			}
+		}
+		s.hub.Mutex.Unlock()
+
+		if len(deliveries) > 0 {
+			log.Printf("✅ Marked %d senders' messages as delivered for user %s", len(deliveries), userID)
+		}
+	}
+
 	for {
 		var raw map[string]interface{}
 

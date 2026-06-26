@@ -210,3 +210,48 @@ func (s *Storage) GetUnreadCounts(userID string) (map[string]int, error) {
 
 	return counts, nil
 }
+
+// MarkAsDelivered помечает все недоставленные сообщения для пользователя как delivered
+// и возвращает карту {sender_id: [msg_ids...]} для уведомления отправителей
+func (s *Storage) MarkAsDelivered(userID string) (map[string][]string, error) {
+	// Сначала получаем все сообщения которые нужно обновить
+	query := `
+		SELECT id, sender 
+		FROM messages 
+		WHERE receiver = ? AND status = 'sent'
+	`
+
+	rows, err := s.db.DB.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Группируем msg_id по sender_id
+	deliveries := make(map[string][]string)
+	for rows.Next() {
+		var msgID, senderID string
+		if err := rows.Scan(&msgID, &senderID); err != nil {
+			continue
+		}
+		deliveries[senderID] = append(deliveries[senderID], msgID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Если есть что обновлять — обновляем
+	if len(deliveries) > 0 {
+		_, err = s.db.DB.Exec(`
+			UPDATE messages 
+			SET status = 'delivered' 
+			WHERE receiver = ? AND status = 'sent'
+		`, userID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return deliveries, nil
+}
