@@ -6,7 +6,7 @@ import { hashStringToColor, getInitials } from './utils.js';
 const chatElements = ['chatHeader', 'log', 'inputArea', 'chatSearchPanel', 'replyPreview'];
 
 export async function openProfile(userId) {
-    // 🆕 Скрываем welcome screen если он виден
+    // Скрываем welcome screen если он виден
     const welcomeScreen = document.getElementById('welcomeScreen');
     if (welcomeScreen && welcomeScreen.style.display !== 'none') {
         welcomeScreen.style.display = 'none';
@@ -42,8 +42,32 @@ export async function openProfile(userId) {
             avatar.textContent = getInitials(profile.username);
         }
         
-        // Username
-        document.getElementById('profileUsername').textContent = profile.username;
+        // 🆕 Имя пользователя под аватаркой
+        const nameEl = document.getElementById('profileName');
+        if (nameEl) nameEl.textContent = profile.username;
+        
+        // 🆕 Статус online/offline
+        const isMyProfile = userId === state.userId;
+        const statusEl = document.getElementById('profileStatus');
+        const statusTextEl = document.getElementById('profileStatusText');
+        
+        if (statusEl && statusTextEl) {
+            let isOnline = false;
+            let statusText = '';
+            
+            if (isMyProfile) {
+                // Для своего профиля — всегда онлайн
+                isOnline = true;
+                statusText = t('online');
+            } else {
+                // Для других — берём из state.onlineStatuses
+                isOnline = state.onlineStatuses.get(userId) === 'online';
+                statusText = isOnline ? t('online') : t('offline');
+            }
+            
+            statusTextEl.textContent = statusText;
+            statusEl.className = `profile-status ${isOnline ? 'online' : 'offline'}`;
+        }
         
         // Bio: показываем секцию только если bio не пустое
         const bioField = document.getElementById('profileBioField');
@@ -67,7 +91,6 @@ export async function openProfile(userId) {
         }
         
         // Кнопки редактирования только для своего профиля
-        const isMyProfile = userId === state.userId;
         const editBtn = document.getElementById('profileEditBtn');
         const saveBtn = document.getElementById('profileSaveBtn');
         const cancelBtn = document.getElementById('profileCancelBtn');
@@ -95,12 +118,10 @@ export function closeProfile() {
     
     // Возвращаем чат обратно
     if (state.activeTargetId) {
-        // Если был открыт чат — показываем элементы чата
         document.getElementById('chatHeader').style.display = 'flex';
         document.getElementById('log').style.display = 'flex';
         document.getElementById('inputArea').style.display = 'flex';
     } else {
-        // Если чат не был открыт — показываем welcome screen
         const welcomeScreen = document.getElementById('welcomeScreen');
         if (welcomeScreen) welcomeScreen.style.display = 'flex';
     }

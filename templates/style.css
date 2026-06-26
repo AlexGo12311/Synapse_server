@@ -2262,10 +2262,13 @@ body.dark-theme .encryption-warning {
     align-items: center;
 }
 
+/* 🆕 Секция с аватаркой, именем и статусом — вертикальная */
 .profile-avatar-section {
     display: flex;
-    justify-content: center;
-    margin-bottom: 24px;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 32px;
+    gap: 12px;
 }
 
 .profile-avatar {
@@ -2280,6 +2283,62 @@ body.dark-theme .encryption-warning {
     font-weight: 700;
     text-transform: uppercase;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    margin-bottom: 4px;
+}
+
+/* 🆕 Имя пользователя под аватаркой */
+.profile-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-color);
+    text-align: center;
+    word-break: break-word;
+    line-height: 1.2;
+    max-width: 100%;
+    margin: 0;
+}
+
+/* 🆕 Статус online/offline */
+.profile-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: var(--surface-input);
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--secondary-text);
+    margin-top: 4px;
+}
+
+.profile-status.online {
+    color: #4CAF50;
+    background: color-mix(in srgb, #4CAF50 8%, var(--surface-input));
+    border-color: color-mix(in srgb, #4CAF50 30%, transparent);
+}
+
+.profile-status.offline {
+    color: var(--secondary-text);
+}
+
+.profile-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+.profile-status.online .profile-status-dot {
+    box-shadow: 0 0 8px currentColor;
+    animation: statusPulse 2s infinite;
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
 }
 
 .profile-info {

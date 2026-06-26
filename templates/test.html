@@ -253,12 +253,15 @@
             <div class="profile-view-body">
                 <div class="profile-avatar-section">
                     <div class="profile-avatar" id="profileAvatar"></div>
+                    <!-- 🆕 Имя пользователя прямо под аватаркой -->
+                    <div class="profile-name" id="profileName"></div>
+                    <!-- 🆕 Статус online/offline -->
+                    <div class="profile-status" id="profileStatus">
+                        <span class="profile-status-dot"></span>
+                        <span class="profile-status-text" id="profileStatusText"></span>
+                    </div>
                 </div>
                 <div class="profile-info">
-                    <div class="profile-field">
-                        <label class="profile-label" data-i18n="username">Username</label>
-                        <div class="profile-value" id="profileUsername"></div>
-                    </div>
                     <div class="profile-field" id="profileBioField" style="display:none;">
                         <label class="profile-label" data-i18n="bio">Bio</label>
                         <div class="profile-value bio-value" id="profileBio"></div>
