@@ -6,14 +6,10 @@ import (
 	"net/http"
 )
 
-type ProfileResponse struct {
-	UserID   string `json:"user_id"`
-	Username string `json:"username"`
+type UpdateProfileRequest struct {
 	Bio      string `json:"bio"`
-}
-
-type UpdateBioRequest struct {
-	Bio string `json:"bio"`
+	Location string `json:"location"`
+	Birthday string `json:"birthday"`
 }
 
 // GetProfile возвращает профиль пользователя по ID
@@ -21,7 +17,6 @@ type UpdateBioRequest struct {
 func (s *Server) GetProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Текущий пользователь (из токена)
 	userIDRaw := r.Context().Value(auth.UserContextKey)
 	_, ok := userIDRaw.(string)
 	if !ok {
@@ -29,29 +24,24 @@ func (s *Server) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ID пользователя чей профиль смотрим
 	targetID := r.URL.Query().Get("user_id")
 	if targetID == "" {
 		http.Error(w, "user_id required", http.StatusBadRequest)
 		return
 	}
 
-	username, bio, err := s.store.GetProfile(targetID)
+	profile, err := s.store.GetProfile(targetID)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	json.NewEncoder(w).Encode(ProfileResponse{
-		UserID:   targetID,
-		Username: username,
-		Bio:      bio,
-	})
+	json.NewEncoder(w).Encode(profile)
 }
 
-// UpdateMyBio обновляет био текущего пользователя
-// POST /profile/bio
-func (s *Server) UpdateMyBio(w http.ResponseWriter, r *http.Request) {
+// UpdateMyProfile обновляет bio, location, birthday текущего пользователя
+// POST /profile
+func (s *Server) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	userIDRaw := r.Context().Value(auth.UserContextKey)
@@ -61,14 +51,14 @@ func (s *Server) UpdateMyBio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req UpdateBioRequest
+	var req UpdateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	if err := s.store.UpdateBio(userID, req.Bio); err != nil {
-		http.Error(w, "Failed to update bio", http.StatusInternalServerError)
+	if err := s.store.UpdateProfile(userID, req.Bio, req.Location, req.Birthday); err != nil {
+		http.Error(w, "Failed to update profile", http.StatusInternalServerError)
 		return
 	}
 

@@ -2428,3 +2428,40 @@ body.dark-theme .encryption-warning {
     background: var(--accent-color-hover);
     border-color: var(--accent-color-hover);
 }
+
+/* 🆕 Поля ввода location и birthday */
+.profile-input {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--text-color);
+    background: var(--surface-input);
+    border: 2px solid var(--accent-color);
+    border-radius: 10px;
+    outline: none;
+    line-height: 1.5;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.profile-input:focus {
+    border-color: var(--accent-color-hover);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 15%, transparent);
+}
+
+/* Стили для input[type="date"] в тёмной теме */
+body.dark-theme input[type="date"] {
+    color-scheme: dark;
+}
+
+input[type="date"] {
+    color-scheme: light;
+}
+
+/* Эмодзи в label */
+.profile-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}

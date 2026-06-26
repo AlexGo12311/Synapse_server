@@ -57,8 +57,18 @@ func main() {
 	mux.Handle("/users", auth.AuthMiddleware(http.HandlerFunc(server.GetUsers)))
 	mux.Handle("/last-messages", auth.AuthMiddleware(http.HandlerFunc(server.GetLastMessages)))
 	mux.Handle("/unread-counts", auth.AuthMiddleware(http.HandlerFunc(server.GetUnreadCounts)))
-	mux.Handle("/profile", auth.AuthMiddleware(http.HandlerFunc(server.GetProfile)))
-	mux.Handle("/profile/bio", auth.AuthMiddleware(http.HandlerFunc(server.UpdateMyBio)))
+	mux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
+		handler := auth.AuthMiddleware(http.HandlerFunc(server.GetProfile))
+		handler.ServeHTTP(w, r)
+	})
+	mux.HandleFunc("/profile/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handler := auth.AuthMiddleware(http.HandlerFunc(server.UpdateMyProfile))
+		handler.ServeHTTP(w, r)
+	})
 
 	log.Println("🚀 Server running on :8080")
 	http.ListenAndServe(":8080", enableCORS(mux))

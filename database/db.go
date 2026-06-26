@@ -43,7 +43,9 @@ func (d *Database) createTables() {
         username TEXT UNIQUE,
         password TEXT,
         pubkey TEXT,
-        bio TEXT DEFAULT ''
+        bio TEXT DEFAULT '',
+        location TEXT DEFAULT '',
+        birthday TEXT DEFAULT ''
     );
     `
 

@@ -36,12 +36,19 @@ const I18N = {
         profile: "Profile",
         username: "Username",
         bio: "Bio",
+        location: "📍 Location",
+        birthday: "🎂 Birthday",
         edit: "✏️ Edit",
         edit_bio: "✏️ Edit Bio",
         add_bio: "✏️ Add Bio",
+        edit_profile: "✏️ Edit Profile",
         save: "💾 Save",
         cancel: "✖ Cancel",
-        bio_placeholder: "Write something about yourself..."
+        bio_placeholder: "Write something about yourself...",
+        location_placeholder: "City, Country",
+        online: "Online",
+        offline: "Offline",
+        months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
     },
     ru: {
         login: "Войти", register: "Регистрация", send: "Отправить", settings: "🎨 Настройки",
@@ -80,12 +87,19 @@ const I18N = {
         profile: "Профиль",
         username: "Имя пользователя",
         bio: "О себе",
+        location: "📍 Местоположение",
+        birthday: "🎂 День рождения",
         edit: "✏️ Редактировать",
         edit_bio: "✏️ Редактировать",
         add_bio: "✏️ Добавить",
+        edit_profile: "✏️ Редактировать",
         save: "💾 Сохранить",
         cancel: "✖ Отмена",
-        bio_placeholder: "Расскажите что-нибудь о себе..."
+        bio_placeholder: "Расскажите что-нибудь о себе...",
+        location_placeholder: "Город, Страна",
+        online: "В сети",
+        offline: "Не в сети",
+        months: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
     }
 };
 
@@ -115,16 +129,13 @@ export function setLanguage(lang) {
         btn.classList.toggle('active', btn.dataset.lang === lang)
     );
     
-    // 🆕 Обновляем текст кнопок профиля если они видны
-    const editBtn = document.getElementById('profileEditBtn');
-    if (editBtn && editBtn.style.display !== 'none') {
-        const profileView = document.getElementById('profileView');
-        const userId = profileView?.dataset.profileUserId;
-        const bioEl = document.getElementById('profileBio');
-        const hasBio = bioEl && bioEl.textContent.trim() !== '';
-        
-        if (userId === state.userId) {
-            editBtn.textContent = hasBio ? t('edit_bio') : t('add_bio');
+    // 🆕 Если профиль открыт — перезагружаем его чтобы обновить формат даты и статус
+    const profileView = document.getElementById('profileView');
+    if (profileView && profileView.style.display === 'flex') {
+        const userId = profileView.dataset.profileUserId;
+        if (userId && window.openProfileFn) {
+            // Небольшая задержка чтобы DOM обновился
+            setTimeout(() => window.openProfileFn(userId), 50);
         }
     }
 }

@@ -253,22 +253,33 @@
             <div class="profile-view-body">
                 <div class="profile-avatar-section">
                     <div class="profile-avatar" id="profileAvatar"></div>
-                    <!-- 🆕 Имя пользователя прямо под аватаркой -->
                     <div class="profile-name" id="profileName"></div>
-                    <!-- 🆕 Статус online/offline -->
                     <div class="profile-status" id="profileStatus">
                         <span class="profile-status-dot"></span>
                         <span class="profile-status-text" id="profileStatusText"></span>
                     </div>
                 </div>
                 <div class="profile-info">
+                    <!-- 🆕 Место жительства -->
+                    <div class="profile-field" id="profileLocationField" style="display:none;">
+                        <label class="profile-label" data-i18n="location">📍 Location</label>
+                        <div class="profile-value" id="profileLocation"></div>
+                        <input type="text" class="profile-input" id="profileLocationEdit" maxlength="100" data-i18n-placeholder="location_placeholder" placeholder="City, Country" style="display:none;">
+                    </div>
+                    <!-- 🆕 День рождения -->
+                    <div class="profile-field" id="profileBirthdayField" style="display:none;">
+                        <label class="profile-label" data-i18n="birthday">🎂 Birthday</label>
+                        <div class="profile-value" id="profileBirthday"></div>
+                        <input type="date" class="profile-input" id="profileBirthdayEdit" style="display:none;">
+                    </div>
+                    <!-- Bio -->
                     <div class="profile-field" id="profileBioField" style="display:none;">
                         <label class="profile-label" data-i18n="bio">Bio</label>
                         <div class="profile-value bio-value" id="profileBio"></div>
                         <textarea class="profile-bio-edit" id="profileBioEdit" maxlength="500" data-i18n-placeholder="bio_placeholder" placeholder="Write something about yourself..." style="display:none;"></textarea>
                     </div>
                     <div class="profile-actions" id="profileActions">
-                        <button class="profile-btn" id="profileEditBtn" style="display:none;" data-i18n="edit_bio">✏️ Edit Bio</button>
+                        <button class="profile-btn" id="profileEditBtn" style="display:none;" data-i18n="edit_profile">✏️ Edit Profile</button>
                         <button class="profile-btn primary" id="profileSaveBtn" style="display:none;" data-i18n="save">💾 Save</button>
                         <button class="profile-btn" id="profileCancelBtn" style="display:none;" data-i18n="cancel">✖ Cancel</button>
                     </div>

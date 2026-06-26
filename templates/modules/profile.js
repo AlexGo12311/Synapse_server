@@ -2,23 +2,40 @@ import { state } from './state.js';
 import { t } from './i18n.js';
 import { hashStringToColor, getInitials } from './utils.js';
 
-// Элементы чата которые нужно скрывать
 const chatElements = ['chatHeader', 'log', 'inputArea', 'chatSearchPanel', 'replyPreview'];
 
+// 🆕 Форматирование даты с учётом языка
+function formatBirthday(dateStr) {
+    if (!dateStr) return '';
+    try {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        if (!year || !month || !day) return dateStr;
+        
+        const months = t('months');
+        if (Array.isArray(months) && months[month - 1]) {
+            if (state.currentLang === 'ru') {
+                return `${day} ${months[month - 1]} ${year}`;
+            } else {
+                return `${months[month - 1]} ${day}, ${year}`;
+            }
+        }
+        return dateStr;
+    } catch (e) {
+        return dateStr;
+    }
+}
+
 export async function openProfile(userId) {
-    // Скрываем welcome screen если он виден
     const welcomeScreen = document.getElementById('welcomeScreen');
     if (welcomeScreen && welcomeScreen.style.display !== 'none') {
         welcomeScreen.style.display = 'none';
     }
     
-    // Скрываем элементы чата
     chatElements.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
     
-    // Показываем профиль
     const profileView = document.getElementById('profileView');
     if (!profileView) return;
     
@@ -42,11 +59,11 @@ export async function openProfile(userId) {
             avatar.textContent = getInitials(profile.username);
         }
         
-        // 🆕 Имя пользователя под аватаркой
+        // Имя
         const nameEl = document.getElementById('profileName');
         if (nameEl) nameEl.textContent = profile.username;
         
-        // 🆕 Статус online/offline
+        // Статус
         const isMyProfile = userId === state.userId;
         const statusEl = document.getElementById('profileStatus');
         const statusTextEl = document.getElementById('profileStatusText');
@@ -56,11 +73,9 @@ export async function openProfile(userId) {
             let statusText = '';
             
             if (isMyProfile) {
-                // Для своего профиля — всегда онлайн
                 isOnline = true;
                 statusText = t('online');
             } else {
-                // Для других — берём из state.onlineStatuses
                 isOnline = state.onlineStatuses.get(userId) === 'online';
                 statusText = isOnline ? t('online') : t('offline');
             }
@@ -69,42 +84,64 @@ export async function openProfile(userId) {
             statusEl.className = `profile-status ${isOnline ? 'online' : 'offline'}`;
         }
         
-        // Bio: показываем секцию только если bio не пустое
+        // 🆕 Location
+        const locationField = document.getElementById('profileLocationField');
+        const locationEl = document.getElementById('profileLocation');
+        const locationEdit = document.getElementById('profileLocationEdit');
+        const hasLocation = profile.location && profile.location.trim() !== '';
+        
+        if (locationField) locationField.style.display = hasLocation ? 'block' : 'none';
+        if (locationEl) {
+            locationEl.textContent = profile.location || '';
+            locationEl.style.display = 'block';
+        }
+        if (locationEdit) {
+            locationEdit.value = profile.location || '';
+            locationEdit.style.display = 'none';
+        }
+        
+        // 🆕 Birthday
+        const birthdayField = document.getElementById('profileBirthdayField');
+        const birthdayEl = document.getElementById('profileBirthday');
+        const birthdayEdit = document.getElementById('profileBirthdayEdit');
+        const hasBirthday = profile.birthday && profile.birthday.trim() !== '';
+        
+        if (birthdayField) birthdayField.style.display = hasBirthday ? 'block' : 'none';
+        if (birthdayEl) {
+            birthdayEl.textContent = formatBirthday(profile.birthday);
+            birthdayEl.style.display = 'block';
+        }
+        if (birthdayEdit) {
+            birthdayEdit.value = profile.birthday || '';
+            birthdayEdit.style.display = 'none';
+        }
+        
+        // Bio
         const bioField = document.getElementById('profileBioField');
         const bioEl = document.getElementById('profileBio');
         const bioEdit = document.getElementById('profileBioEdit');
-        
         const hasBio = profile.bio && profile.bio.trim() !== '';
         
-        if (bioField) {
-            bioField.style.display = hasBio ? 'block' : 'none';
-        }
-        
+        if (bioField) bioField.style.display = hasBio ? 'block' : 'none';
         if (bioEl) {
             bioEl.textContent = profile.bio || '';
             bioEl.style.display = 'block';
         }
-        
         if (bioEdit) {
             bioEdit.value = profile.bio || '';
             bioEdit.style.display = 'none';
         }
         
-        // Кнопки редактирования только для своего профиля
+        // Кнопки — Edit Profile для своего профиля (даже если всё пустое)
         const editBtn = document.getElementById('profileEditBtn');
         const saveBtn = document.getElementById('profileSaveBtn');
         const cancelBtn = document.getElementById('profileCancelBtn');
         
-        if (editBtn) {
-            editBtn.style.display = isMyProfile ? 'block' : 'none';
-            editBtn.textContent = hasBio ? t('edit_bio') : t('add_bio');
-        }
+        if (editBtn) editBtn.style.display = isMyProfile ? 'block' : 'none';
         if (saveBtn) saveBtn.style.display = 'none';
         if (cancelBtn) cancelBtn.style.display = 'none';
         
-        // Сохраняем ID текущего профиля
         profileView.dataset.profileUserId = userId;
-        
         profileView.style.display = 'flex';
     } catch (e) {
         console.error("Open profile error:", e);
@@ -116,7 +153,6 @@ export function closeProfile() {
     const profileView = document.getElementById('profileView');
     if (profileView) profileView.style.display = 'none';
     
-    // Возвращаем чат обратно
     if (state.activeTargetId) {
         document.getElementById('chatHeader').style.display = 'flex';
         document.getElementById('log').style.display = 'flex';
@@ -127,65 +163,67 @@ export function closeProfile() {
     }
 }
 
-export function startEditBio() {
-    const bioEl = document.getElementById('profileBio');
-    const bioEdit = document.getElementById('profileBioEdit');
-    const bioField = document.getElementById('profileBioField');
-    const editBtn = document.getElementById('profileEditBtn');
-    const saveBtn = document.getElementById('profileSaveBtn');
-    const cancelBtn = document.getElementById('profileCancelBtn');
+export function startEditProfile() {
+    // Показываем все поля в режиме редактирования
+    const fields = [
+        { field: 'profileLocationField', view: 'profileLocation', edit: 'profileLocationEdit' },
+        { field: 'profileBirthdayField', view: 'profileBirthday', edit: 'profileBirthdayEdit' },
+        { field: 'profileBioField', view: 'profileBio', edit: 'profileBioEdit' }
+    ];
     
-    if (bioField) bioField.style.display = 'block';
-    if (bioEl) bioEl.style.display = 'none';
-    if (bioEdit) {
-        bioEdit.style.display = 'block';
-        bioEdit.focus();
-        bioEdit.setSelectionRange(bioEdit.value.length, bioEdit.value.length);
-    }
+    fields.forEach(({ field, view, edit }) => {
+        const fieldEl = document.getElementById(field);
+        const viewEl = document.getElementById(view);
+        const editEl = document.getElementById(edit);
+        if (fieldEl) fieldEl.style.display = 'block';
+        if (viewEl) viewEl.style.display = 'none';
+        if (editEl) editEl.style.display = 'block';
+    });
     
-    if (editBtn) editBtn.style.display = 'none';
-    if (saveBtn) saveBtn.style.display = 'block';
-    if (cancelBtn) cancelBtn.style.display = 'block';
+    document.getElementById('profileEditBtn').style.display = 'none';
+    document.getElementById('profileSaveBtn').style.display = 'block';
+    document.getElementById('profileCancelBtn').style.display = 'block';
 }
 
-export function cancelEditBio() {
+export function cancelEditProfile() {
     const profileView = document.getElementById('profileView');
     const userId = profileView?.dataset.profileUserId;
     if (userId) openProfile(userId);
 }
 
-export async function saveBio() {
+export async function saveProfile() {
     const profileView = document.getElementById('profileView');
     const userId = profileView?.dataset.profileUserId;
-    const bioEdit = document.getElementById('profileBioEdit');
     
-    if (!bioEdit || !userId) return;
+    if (!userId) return;
     
-    const newBio = bioEdit.value.trim();
+    const bio = document.getElementById('profileBioEdit')?.value.trim() || '';
+    const location = document.getElementById('profileLocationEdit')?.value.trim() || '';
+    const birthday = document.getElementById('profileBirthdayEdit')?.value || '';
     
     try {
-        const res = await fetch('http://localhost:8080/profile/bio', {
+        const res = await fetch('http://localhost:8080/profile/update', {
             method: 'POST',
             headers: {
                 "Authorization": "Bearer " + state.token,
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ bio: newBio })
+            body: JSON.stringify({ bio, location, birthday })
         });
         
         if (res.ok) {
             openProfile(userId);
         } else {
-            console.error("Failed to save bio");
+            console.error("Failed to save profile");
         }
     } catch (e) {
-        console.error("Save bio error:", e);
+        console.error("Save profile error:", e);
     }
 }
 
 export function initProfile() {
     document.getElementById('profileBackBtn')?.addEventListener('click', closeProfile);
-    document.getElementById('profileEditBtn')?.addEventListener('click', startEditBio);
-    document.getElementById('profileSaveBtn')?.addEventListener('click', saveBio);
-    document.getElementById('profileCancelBtn')?.addEventListener('click', cancelEditBio);
+    document.getElementById('profileEditBtn')?.addEventListener('click', startEditProfile);
+    document.getElementById('profileSaveBtn')?.addEventListener('click', saveProfile);
+    document.getElementById('profileCancelBtn')?.addEventListener('click', cancelEditProfile);
 }

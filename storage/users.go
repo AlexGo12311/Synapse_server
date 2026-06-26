@@ -139,29 +139,54 @@ func (s *Storage) GetUserByID(userID string) (string, error) {
 	return username, nil
 }
 
-// GetProfile возвращает профиль пользователя (username + bio)
-func (s *Storage) GetProfile(userID string) (username string, bio string, err error) {
-	err = s.db.DB.QueryRow(`
-		SELECT username, COALESCE(bio, '') 
-		FROM users 
-		WHERE id = ?
-	`, userID).Scan(&username, &bio)
-	return
+// UserProfile представляет публичную информацию о пользователе
+type UserProfile struct {
+	UserID   string `json:"user_id"`
+	Username string `json:"username"`
+	Bio      string `json:"bio"`
+	Location string `json:"location"`
+	Birthday string `json:"birthday"`
 }
 
-// UpdateBio обновляет био пользователя
-func (s *Storage) UpdateBio(userID string, bio string) error {
-	// Ограничиваем длину био
+// GetProfile возвращает профиль пользователя (username, bio, location, birthday)
+func (s *Storage) GetProfile(userID string) (*UserProfile, error) {
+	profile := &UserProfile{UserID: userID}
+
+	err := s.db.DB.QueryRow(`
+		SELECT username, COALESCE(bio, ''), COALESCE(location, ''), COALESCE(birthday, '')
+		FROM users 
+		WHERE id = ?
+	`, userID).Scan(&profile.Username, &profile.Bio, &profile.Location, &profile.Birthday)
+
+	if err != nil {
+		log.Println("❌ GetProfile error:", err)
+		return nil, err
+	}
+
+	return profile, nil
+}
+
+// UpdateProfile обновляет bio, location и birthday пользователя
+func (s *Storage) UpdateProfile(userID string, bio, location, birthday string) error {
+	// Ограничиваем длину полей
 	if len(bio) > 500 {
 		bio = bio[:500]
 	}
+	if len(location) > 100 {
+		location = location[:100]
+	}
+	if len(birthday) > 10 {
+		birthday = birthday[:10]
+	}
 
 	_, err := s.db.DB.Exec(`
-		UPDATE users SET bio = ? WHERE id = ?
-	`, bio, userID)
+		UPDATE users 
+		SET bio = ?, location = ?, birthday = ? 
+		WHERE id = ?
+	`, bio, location, birthday, userID)
 
 	if err != nil {
-		log.Println("❌ UpdateBio error:", err)
+		log.Println("❌ UpdateProfile error:", err)
 	}
 	return err
 }
