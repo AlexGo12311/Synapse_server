@@ -6,7 +6,13 @@ import { hashStringToColor, getInitials } from './utils.js';
 const chatElements = ['chatHeader', 'log', 'inputArea', 'chatSearchPanel', 'replyPreview'];
 
 export async function openProfile(userId) {
-    // Скрываем чат
+    // 🆕 Скрываем welcome screen если он виден
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    if (welcomeScreen && welcomeScreen.style.display !== 'none') {
+        welcomeScreen.style.display = 'none';
+    }
+    
+    // Скрываем элементы чата
     chatElements.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -66,7 +72,6 @@ export async function openProfile(userId) {
         const saveBtn = document.getElementById('profileSaveBtn');
         const cancelBtn = document.getElementById('profileCancelBtn');
         
-        // 🆕 Используем t() для локализованного текста
         if (editBtn) {
             editBtn.style.display = isMyProfile ? 'block' : 'none';
             editBtn.textContent = hasBio ? t('edit_bio') : t('add_bio');
@@ -90,11 +95,14 @@ export function closeProfile() {
     
     // Возвращаем чат обратно
     if (state.activeTargetId) {
+        // Если был открыт чат — показываем элементы чата
         document.getElementById('chatHeader').style.display = 'flex';
         document.getElementById('log').style.display = 'flex';
         document.getElementById('inputArea').style.display = 'flex';
     } else {
-        document.getElementById('welcomeScreen').style.display = 'flex';
+        // Если чат не был открыт — показываем welcome screen
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        if (welcomeScreen) welcomeScreen.style.display = 'flex';
     }
 }
 
