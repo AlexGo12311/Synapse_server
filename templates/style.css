@@ -2212,6 +2212,7 @@ body.dark-theme .encryption-warning {
     background: var(--surface-main);
     height: 100%;
     overflow: hidden;
+    min-height: 0; /* 🆕 КРИТИЧНО: позволяет flex-элементу сжиматься */
 }
 
 .profile-view-header {
@@ -2223,6 +2224,7 @@ body.dark-theme .encryption-warning {
     gap: 12px;
     z-index: 10;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    flex-shrink: 0; /* 🆕 Не сжимается */
 }
 
 .profile-back-btn {
@@ -2252,13 +2254,17 @@ body.dark-theme .encryption-warning {
     color: var(--text-color);
 }
 
+/* 🆕 ГЛАВНЫЙ СКРОЛЛ-КОНТЕЙНЕР */
 .profile-view-body {
     flex: 1;
     overflow-y: auto;
-    padding: 0;
+    overflow-x: hidden;
+    min-height: 0; /* 🆕 КРИТИЧНО: позволяет скролл работать в flex */
     display: flex;
     flex-direction: column;
     align-items: center;
+    padding: 0;
+    -webkit-overflow-scrolling: touch; /* Плавный скролл на iOS */
 }
 
 /* ================================================ */
@@ -2275,10 +2281,10 @@ body.dark-theme .encryption-warning {
     position: relative;
     box-sizing: border-box;
     overflow: hidden;
-    /* Убрано скругление снизу */
+    flex-shrink: 0; /* 🆕 Не сжимается */
 }
 
-/* ===== ГРАДИЕНТЫ ===== */
+/* Градиенты */
 .profile-hero[data-color="ocean"] {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
@@ -2304,7 +2310,7 @@ body.dark-theme .encryption-warning {
     background: linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%);
 }
 
-/* ===== 🆕 ОБЫЧНЫЕ ЦВЕТА ===== */
+/* Обычные цвета */
 .profile-hero[data-color="red"] { background: #e53935; }
 .profile-hero[data-color="blue"] { background: #1e88e5; }
 .profile-hero[data-color="green"] { background: #43a047; }
@@ -2314,7 +2320,7 @@ body.dark-theme .encryption-warning {
 .profile-hero[data-color="pink"] { background: #d81b60; }
 .profile-hero[data-color="indigo"] { background: #3949ab; }
 
-/* 🆕 ПЛАВНОЕ ПЕРЕЛИВАНИЕ (10s вместо 4s) */
+/* Плавное переливание */
 .profile-hero::before {
     content: '';
     position: absolute;
@@ -2342,7 +2348,6 @@ body.dark-theme .encryption-warning {
     100% { background-position: 0% 0%; }
 }
 
-/* Элементы внутри шапки поверх анимации */
 .profile-hero > * {
     position: relative;
     z-index: 1;
@@ -2384,10 +2389,11 @@ body.dark-theme .encryption-warning {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 32px 24px 0;
+    padding: 32px 24px 24px;
     gap: 12px;
     width: 100%;
     box-sizing: border-box;
+    flex-shrink: 0; /* 🆕 Не сжимается */
 }
 
 .profile-avatar {
@@ -2466,7 +2472,7 @@ body.dark-theme .encryption-warning {
 .profile-info {
     width: 100%;
     max-width: 480px;
-    padding: 24px;
+    padding: 24px 24px 40px; /* 🆕 Нижний padding для скролла */
     box-sizing: border-box;
 }
 
@@ -2535,6 +2541,68 @@ body.dark-theme input[type="date"] { color-scheme: dark; }
 input[type="date"] { color-scheme: light; }
 
 /* ================================================ */
+/* ===== 🆕 МИНИ-КАРТА В РЕЖИМЕ ПРОСМОТРА ===== */
+/* ================================================ */
+
+.profile-map-preview {
+    width: 100%;
+    height: 180px;
+    border-radius: 12px;
+    margin-top: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    pointer-events: none; /* 🆕 Карта некликабельна при просмотре */
+}
+
+/* ================================================ */
+/* ===== 🆕 ИНТЕРАКТИВНАЯ КАРТА ПРИ РЕДАКТИРОВАНИИ ===== */
+/* ================================================ */
+
+.profile-map-edit-container {
+    margin-top: 12px;
+}
+
+.profile-map-edit {
+    width: 100%;
+    height: 220px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.profile-map-hint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--secondary-text);
+    text-align: center;
+    font-style: italic;
+}
+
+/* Leaflet customization */
+.profile-map-preview .leaflet-control-zoom,
+.profile-map-preview .leaflet-control-attribution,
+.profile-map-edit .leaflet-control-attribution {
+    display: none;
+}
+
+.profile-map-edit .leaflet-container {
+    background: var(--surface-hover);
+}
+
+/* Dark theme tiles */
+body.dark-theme .profile-map-preview,
+body.dark-theme .profile-map-edit {
+    filter: brightness(0.85) invert(1) contrast(0.9) hue-rotate(180deg);
+}
+
+body.dark-theme .profile-map-preview .leaflet-marker-icon,
+body.dark-theme .profile-map-edit .leaflet-marker-icon {
+    filter: invert(1) hue-rotate(180deg);
+}
+
+/* ================================================ */
 /* ===== 🆕 ПАЛИТРА ВЫБОРА ЦВЕТА ===== */
 /* ================================================ */
 
@@ -2579,7 +2647,6 @@ input[type="date"] { color-scheme: light; }
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
 
-/* Кнопка "Без цвета" */
 .color-swatch[data-color="none"] {
     background: var(--surface-input);
     border: 2px dashed var(--border-color);
@@ -2606,7 +2673,6 @@ input[type="date"] { color-scheme: light; }
     text-shadow: none;
 }
 
-/* ===== ГРАДИЕНТЫ В ПАЛИТРЕ ===== */
 .color-swatch[data-color="ocean"] { background: linear-gradient(135deg, #667eea, #764ba2); }
 .color-swatch[data-color="sunset"] { background: linear-gradient(135deg, #f093fb, #f5576c); }
 .color-swatch[data-color="forest"] { background: linear-gradient(135deg, #11998e, #38ef7d); }
@@ -2616,7 +2682,6 @@ input[type="date"] { color-scheme: light; }
 .color-swatch[data-color="aurora"] { background: linear-gradient(135deg, #00c6ff, #0072ff); }
 .color-swatch[data-color="rose"] { background: linear-gradient(135deg, #ee9ca7, #ffdde1); }
 
-/* ===== 🆕 ОБЫЧНЫЕ ЦВЕТА В ПАЛИТРЕ ===== */
 .color-swatch[data-color="red"] { background: #e53935; }
 .color-swatch[data-color="blue"] { background: #1e88e5; }
 .color-swatch[data-color="green"] { background: #43a047; }
@@ -2634,6 +2699,7 @@ input[type="date"] { color-scheme: light; }
     display: flex;
     gap: 10px;
     margin-top: 20px;
+    padding-bottom: 8px; /* 🆕 Отступ снизу */
 }
 
 .profile-btn {
@@ -2663,4 +2729,19 @@ input[type="date"] { color-scheme: light; }
 .profile-btn.primary:hover {
     background: var(--accent-color-hover);
     border-color: var(--accent-color-hover);
+}
+
+/* ================================================ */
+/* ===== СКРЫВАЕМ СКРОЛЛБАР (НО СКРОЛЛ РАБОТАЕТ) ===== */
+/* ================================================ */
+
+.profile-view-body {
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;     /* IE и Edge */
+}
+
+.profile-view-body::-webkit-scrollbar {
+    display: none;                /* Chrome, Safari, Opera, новый Edge */
+    width: 0;
+    height: 0;
 }

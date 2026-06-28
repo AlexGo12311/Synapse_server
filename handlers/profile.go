@@ -7,10 +7,12 @@ import (
 )
 
 type UpdateProfileRequest struct {
-	Bio          string `json:"bio"`
-	Location     string `json:"location"`
-	Birthday     string `json:"birthday"`
-	ProfileColor string `json:"profile_color"`
+	Bio          string  `json:"bio"`
+	Location     string  `json:"location"`
+	Birthday     string  `json:"birthday"`
+	ProfileColor string  `json:"profile_color"`
+	Latitude     float64 `json:"latitude"`
+	Longitude    float64 `json:"longitude"`
 }
 
 // GetProfile возвращает профиль пользователя по ID
@@ -56,7 +58,7 @@ func (s *Server) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.UpdateProfile(userID, req.Bio, req.Location, req.Birthday, req.ProfileColor); err != nil {
+	if err := s.store.UpdateProfile(userID, req.Bio, req.Location, req.Birthday, req.ProfileColor, req.Latitude, req.Longitude); err != nil {
 		http.Error(w, "Failed to update profile", http.StatusInternalServerError)
 		return
 	}

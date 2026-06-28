@@ -7,6 +7,10 @@
     
     <link rel="stylesheet" href="style.css">
     
+    <!-- 🆕 Leaflet.js для интерактивных карт -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+    
     <script src="crypto.js" defer></script>
     <script type="module" src="app.js"></script>
 </head>
@@ -275,11 +279,19 @@
                         <label class="profile-label" data-i18n="profile_color">🎨 Profile Color</label>
                         <div class="profile-color-palette" id="profileColorPalette"></div>
                     </div>
-                    <!-- Location -->
+                    <!-- 🆕 Location С КАРТОЙ -->
                     <div class="profile-field" id="profileLocationField" style="display:none;">
                         <label class="profile-label" data-i18n="location">📍 Location</label>
                         <div class="profile-value" id="profileLocation"></div>
+                        <!-- 🆕 Мини-карта в режиме просмотра (только для чтения) -->
+                        <div class="profile-map-preview" id="profileMapPreview" style="display:none;"></div>
+                        <!-- 🆕 Input для редактирования -->
                         <input type="text" class="profile-input" id="profileLocationEdit" maxlength="100" data-i18n-placeholder="location_placeholder" placeholder="City, Country" style="display:none;">
+                        <!-- 🆕 Интерактивная карта для редактирования -->
+                        <div class="profile-map-edit-container" id="profileMapEditContainer" style="display:none;">
+                            <div class="profile-map-edit" id="profileMapEdit"></div>
+                            <div class="profile-map-hint" data-i18n="map_hint">💡 Click on map to set location</div>
+                        </div>
                     </div>
                     <!-- Birthday -->
                     <div class="profile-field" id="profileBirthdayField" style="display:none;">

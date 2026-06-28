@@ -57,7 +57,7 @@ const I18N = {
         color_orange: "Orange",
         color_teal: "Teal",
         color_pink: "Pink",
-        color_indigo: "Indigo",
+        map_hint: "💡 Click on map to set location",
     },
     ru: {
         login: "Войти", register: "Регистрация", send: "Отправить", settings: "🎨 Настройки",
@@ -118,6 +118,7 @@ const I18N = {
         color_teal: "Бирюзовый",
         color_pink: "Розовый",
         color_indigo: "Индиго",
+        map_hint: "💡 Кликните по карте, чтобы указать место",
     }
 };
 
