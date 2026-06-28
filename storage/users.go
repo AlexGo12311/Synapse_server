@@ -141,22 +141,24 @@ func (s *Storage) GetUserByID(userID string) (string, error) {
 
 // UserProfile представляет публичную информацию о пользователе
 type UserProfile struct {
-	UserID   string `json:"user_id"`
-	Username string `json:"username"`
-	Bio      string `json:"bio"`
-	Location string `json:"location"`
-	Birthday string `json:"birthday"`
+	UserID       string `json:"user_id"`
+	Username     string `json:"username"`
+	Bio          string `json:"bio"`
+	Location     string `json:"location"`
+	Birthday     string `json:"birthday"`
+	ProfileColor string `json:"profile_color"`
 }
 
-// GetProfile возвращает профиль пользователя (username, bio, location, birthday)
+// GetProfile возвращает профиль пользователя
 func (s *Storage) GetProfile(userID string) (*UserProfile, error) {
 	profile := &UserProfile{UserID: userID}
 
 	err := s.db.DB.QueryRow(`
-		SELECT username, COALESCE(bio, ''), COALESCE(location, ''), COALESCE(birthday, '')
+		SELECT username, COALESCE(bio, ''), COALESCE(location, ''), 
+		       COALESCE(birthday, ''), COALESCE(profile_color, '')
 		FROM users 
 		WHERE id = ?
-	`, userID).Scan(&profile.Username, &profile.Bio, &profile.Location, &profile.Birthday)
+	`, userID).Scan(&profile.Username, &profile.Bio, &profile.Location, &profile.Birthday, &profile.ProfileColor)
 
 	if err != nil {
 		log.Println("❌ GetProfile error:", err)
@@ -166,9 +168,8 @@ func (s *Storage) GetProfile(userID string) (*UserProfile, error) {
 	return profile, nil
 }
 
-// UpdateProfile обновляет bio, location и birthday пользователя
-func (s *Storage) UpdateProfile(userID string, bio, location, birthday string) error {
-	// Ограничиваем длину полей
+// UpdateProfile обновляет профиль пользователя
+func (s *Storage) UpdateProfile(userID string, bio, location, birthday, profileColor string) error {
 	if len(bio) > 500 {
 		bio = bio[:500]
 	}
@@ -178,12 +179,15 @@ func (s *Storage) UpdateProfile(userID string, bio, location, birthday string) e
 	if len(birthday) > 10 {
 		birthday = birthday[:10]
 	}
+	if len(profileColor) > 30 {
+		profileColor = profileColor[:30]
+	}
 
 	_, err := s.db.DB.Exec(`
 		UPDATE users 
-		SET bio = ?, location = ?, birthday = ? 
+		SET bio = ?, location = ?, birthday = ?, profile_color = ? 
 		WHERE id = ?
-	`, bio, location, birthday, userID)
+	`, bio, location, birthday, profileColor, userID)
 
 	if err != nil {
 		log.Println("❌ UpdateProfile error:", err)

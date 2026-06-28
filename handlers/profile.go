@@ -7,13 +7,13 @@ import (
 )
 
 type UpdateProfileRequest struct {
-	Bio      string `json:"bio"`
-	Location string `json:"location"`
-	Birthday string `json:"birthday"`
+	Bio          string `json:"bio"`
+	Location     string `json:"location"`
+	Birthday     string `json:"birthday"`
+	ProfileColor string `json:"profile_color"`
 }
 
 // GetProfile возвращает профиль пользователя по ID
-// GET /profile?user_id=xxx
 func (s *Server) GetProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -39,8 +39,7 @@ func (s *Server) GetProfile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(profile)
 }
 
-// UpdateMyProfile обновляет bio, location, birthday текущего пользователя
-// POST /profile
+// UpdateMyProfile обновляет профиль текущего пользователя
 func (s *Server) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -57,7 +56,7 @@ func (s *Server) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.UpdateProfile(userID, req.Bio, req.Location, req.Birthday); err != nil {
+	if err := s.store.UpdateProfile(userID, req.Bio, req.Location, req.Birthday, req.ProfileColor); err != nil {
 		http.Error(w, "Failed to update profile", http.StatusInternalServerError)
 		return
 	}

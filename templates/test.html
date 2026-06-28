@@ -251,7 +251,8 @@
                 </div>
             </div>
             <div class="profile-view-body">
-                <div class="profile-avatar-section">
+                <!-- 🆕 Градиентная шапка -->
+                <div class="profile-hero" id="profileHero" style="display:none;">
                     <div class="profile-avatar" id="profileAvatar"></div>
                     <div class="profile-name" id="profileName"></div>
                     <div class="profile-status" id="profileStatus">
@@ -259,14 +260,28 @@
                         <span class="profile-status-text" id="profileStatusText"></span>
                     </div>
                 </div>
+                <!-- Обычная секция (когда нет шапки) -->
+                <div class="profile-avatar-section" id="profilePlainSection">
+                    <div class="profile-avatar" id="profileAvatarPlain"></div>
+                    <div class="profile-name" id="profileNamePlain"></div>
+                    <div class="profile-status" id="profileStatusPlain">
+                        <span class="profile-status-dot"></span>
+                        <span class="profile-status-text" id="profileStatusTextPlain"></span>
+                    </div>
+                </div>
                 <div class="profile-info">
-                    <!-- 🆕 Место жительства -->
+                    <!-- 🆕 Палитра выбора цвета (только для своего профиля при редактировании) -->
+                    <div class="profile-field" id="profileColorField" style="display:none;">
+                        <label class="profile-label" data-i18n="profile_color">🎨 Profile Color</label>
+                        <div class="profile-color-palette" id="profileColorPalette"></div>
+                    </div>
+                    <!-- Location -->
                     <div class="profile-field" id="profileLocationField" style="display:none;">
                         <label class="profile-label" data-i18n="location">📍 Location</label>
                         <div class="profile-value" id="profileLocation"></div>
                         <input type="text" class="profile-input" id="profileLocationEdit" maxlength="100" data-i18n-placeholder="location_placeholder" placeholder="City, Country" style="display:none;">
                     </div>
-                    <!-- 🆕 День рождения -->
+                    <!-- Birthday -->
                     <div class="profile-field" id="profileBirthdayField" style="display:none;">
                         <label class="profile-label" data-i18n="birthday">🎂 Birthday</label>
                         <div class="profile-value" id="profileBirthday"></div>

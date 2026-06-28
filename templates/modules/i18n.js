@@ -48,7 +48,16 @@ const I18N = {
         location_placeholder: "City, Country",
         online: "Online",
         offline: "Offline",
-        months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+        months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+        profile_color: "🎨 Profile Color",
+        color_red: "Red",
+        color_blue: "Blue",
+        color_green: "Green",
+        color_purple: "Purple",
+        color_orange: "Orange",
+        color_teal: "Teal",
+        color_pink: "Pink",
+        color_indigo: "Indigo",
     },
     ru: {
         login: "Войти", register: "Регистрация", send: "Отправить", settings: "🎨 Настройки",
@@ -99,7 +108,16 @@ const I18N = {
         location_placeholder: "Город, Страна",
         online: "В сети",
         offline: "Не в сети",
-        months: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+        months: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],
+        profile_color: "🎨 Цвет профиля",
+        color_red: "Красный",
+        color_blue: "Синий",
+        color_green: "Зелёный",
+        color_purple: "Фиолетовый",
+        color_orange: "Оранжевый",
+        color_teal: "Бирюзовый",
+        color_pink: "Розовый",
+        color_indigo: "Индиго",
     }
 };
 

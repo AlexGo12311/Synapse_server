@@ -45,7 +45,8 @@ func (d *Database) createTables() {
         pubkey TEXT,
         bio TEXT DEFAULT '',
         location TEXT DEFAULT '',
-        birthday TEXT DEFAULT ''
+        birthday TEXT DEFAULT '',
+        profile_color TEXT DEFAULT ''
     );
     `
 

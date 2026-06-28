@@ -7,6 +7,7 @@ type User struct {
 	Location string `json:"location"`
 	Birthday string `json:"birthday"`
 
-	Password string `json:"-"`
-	PubKey   string `json:"-"`
+	Password     string `json:"-"`
+	PubKey       string `json:"-"`
+	ProfileColor string `json:"-"`
 }
