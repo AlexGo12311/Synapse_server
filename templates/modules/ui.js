@@ -659,10 +659,22 @@ export function updateChatAreaVisibility() {
 }
 
 export function selectUser(targetId, targetName) {
+    // 🆕 Закрываем открытый профиль при выборе чата
+    let profileWasOpen = false;
+    const profileView = document.getElementById('profileView');
+    if (profileView && profileView.style.display === 'flex') {
+        profileView.style.display = 'none';
+        profileWasOpen = true;
+    }
+    
     state.activeTargetId = String(targetId);
     state.activeTargetName = targetName;
     const chatTarget = document.getElementById("activeChatTarget");
-    if (chatTarget.innerText === targetName && getLogDiv().children.length > 0) return;
+    
+    // Ранний return только если профиль НЕ был открыт
+    // Если профиль был открыт — нужно заново показать элементы чата
+    if (!profileWasOpen && chatTarget.innerText === targetName && getLogDiv().children.length > 0) return;
+    
     chatTarget.innerText = targetName;
     document.getElementById("messageInput").disabled = false;
     document.getElementById("sendBtn").disabled = false;
