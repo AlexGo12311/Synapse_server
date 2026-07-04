@@ -18,8 +18,13 @@ export function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabName));
     document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.toggle('active', pane.id === 'tab-' + tabName));
     const searchContainer = document.getElementById('searchContainer');
-    if (searchContainer) searchContainer.classList.toggle('hidden', tabName !== 'chats');
+    if (searchContainer) searchContainer.classList.toggle('hidden', tabName !== 'chats' && tabName !== 'groups');
     if (tabName === 'keys') updateMyFingerprintDisplay();
+    
+    // 🆕 Загружаем группы при переключении на вкладку groups
+    if (tabName === 'groups' && window.groupsModule) {
+        window.groupsModule.loadGroups();
+    }
 }
 
 export async function updateMyFingerprintDisplay() {
@@ -108,7 +113,7 @@ export function onChatSearchInput(e) {
     if (!query) { logDiv.classList.remove('chat-searching'); state.chatSearchMatches = []; state.chatSearchActiveIndex = -1; updateChatSearchCounter(); return; }
     logDiv.classList.add('chat-searching');
     state.chatSearchMatches = [];
-    logDiv.querySelectorAll('.message-row.me, .message-row.other').forEach(row => {
+    logDiv.querySelectorAll('.message-row.me, .message-row.other, .message-row.group-other').forEach(row => {
         const text = row.querySelector('.bubble-text')?.textContent || '';
         if (text.toLowerCase().includes(query.toLowerCase())) { row.classList.add('search-hit'); state.chatSearchMatches.push(row); }
     });
@@ -442,6 +447,24 @@ export function initTypingIndicator() {
 }
 
 export function onTypingInput() {
+    // 🆕 Поддержка группового typing
+    if (state.activeGroupId) {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+        if (!state.isTyping) {
+            state.isTyping = true;
+            state.ws.send(JSON.stringify({ type: "group_typing", group_id: state.activeGroupId }));
+        }
+        if (state.typingTimer) clearTimeout(state.typingTimer);
+        state.typingTimer = setTimeout(() => {
+            state.isTyping = false;
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                state.ws.send(JSON.stringify({ type: "group_stop_typing", group_id: state.activeGroupId }));
+            }
+        }, constants.TYPING_TIMEOUT);
+        return;
+    }
+    
+    // Личные чаты (старая логика)
     if (!state.activeTargetId || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
     if (!state.isTyping) { state.isTyping = true; state.ws.send(JSON.stringify({ type: "typing", to: state.activeTargetId })); }
     if (state.typingTimer) clearTimeout(state.typingTimer);
@@ -473,13 +496,26 @@ export function hidePeerTyping() {
 }
 
 export function startReply(msgId) {
-    const msg = state.messagesMap.get(msgId);
-    if (!msg) return;
-    state.replyingTo = msg;
+    // 🆕 Сначала проверяем групповые сообщения
+    if (state.activeGroupId) {
+        const groupMsgMap = state.groupMessagesMap ? state.groupMessagesMap.get(state.activeGroupId) : null;
+        const msg = groupMsgMap ? groupMsgMap.get(msgId) : null;
+        if (!msg) return;
+        state.replyingTo = {
+            id: msg.id,
+            text: msg.data,
+            fromUsername: msg.username
+        };
+    } else {
+        const msg = state.messagesMap.get(msgId);
+        if (!msg) return;
+        state.replyingTo = msg;
+    }
+    
     const preview = document.getElementById('replyPreview');
     if (!preview) return;
-    document.getElementById('replyPreviewName').textContent = msg.fromUsername;
-    document.getElementById('replyPreviewText').textContent = msg.text || t('encrypted');
+    document.getElementById('replyPreviewName').textContent = state.replyingTo.fromUsername;
+    document.getElementById('replyPreviewText').textContent = state.replyingTo.text || t('encrypted');
     preview.style.display = 'flex';
     const input = document.getElementById('messageInput');
     if (input) input.focus();
@@ -492,7 +528,21 @@ export function cancelReply() {
 }
 
 export function renderReplyQuote(replyToId) {
-    const msg = state.messagesMap.get(replyToId);
+    // 🆕 Поддержка reply из групповых чатов
+    let msg = state.messagesMap.get(replyToId);
+    if (!msg && state.activeGroupId && state.groupMessagesMap) {
+        const groupMsgMap = state.groupMessagesMap.get(state.activeGroupId);
+        if (groupMsgMap) {
+            const groupMsg = groupMsgMap.get(replyToId);
+            if (groupMsg) {
+                msg = {
+                    fromUsername: groupMsg.username,
+                    text: groupMsg.data
+                };
+            }
+        }
+    }
+    
     if (!msg) return null;
     const quote = document.createElement('div');
     quote.className = 'reply-quote';
@@ -532,6 +582,11 @@ export function initUI() {
         myAvatar.onclick = () => {
             if (window.openProfileFn) window.openProfileFn(state.userId);
         };
+    }
+    
+    // 🆕 Инициализация модуля групп
+    if (window.groupsModule) {
+        window.groupsModule.initGroups();
     }
     
     renderThemesGrid();
@@ -644,7 +699,8 @@ export function updateChatAreaVisibility() {
         return;
     }
     
-    if (state.activeTargetId) {
+    // 🆕 Учитываем и личные и групповые чаты
+    if (state.activeTargetId || state.activeGroupId) {
         if (welcomeScreen) welcomeScreen.style.display = 'none';
         if (chatHeader) chatHeader.style.display = 'flex';
         if (logDiv) logDiv.style.display = 'flex';
@@ -667,16 +723,27 @@ export function selectUser(targetId, targetName) {
         profileWasOpen = true;
     }
     
+    // 🆕 Сбрасываем групповой чат
+    state.activeGroupId = null;
+    state.activeGroupName = null;
+    document.querySelectorAll('.group-item').forEach(el => el.classList.remove('active'));
+    
+    // 🆕 Восстанавливаем placeholder и presence indicator
+    const messageInput = document.getElementById("messageInput");
+    if (messageInput) messageInput.placeholder = t('message_placeholder');
+    
+    const chatHeaderPresence = document.getElementById("chatHeaderPresence");
+    if (chatHeaderPresence) chatHeaderPresence.style.display = '';
+    
     state.activeTargetId = String(targetId);
     state.activeTargetName = targetName;
     const chatTarget = document.getElementById("activeChatTarget");
     
     // Ранний return только если профиль НЕ был открыт
-    // Если профиль был открыт — нужно заново показать элементы чата
     if (!profileWasOpen && chatTarget.innerText === targetName && getLogDiv().children.length > 0) return;
     
     chatTarget.innerText = targetName;
-    document.getElementById("messageInput").disabled = false;
+    if (messageInput) messageInput.disabled = false;
     document.getElementById("sendBtn").disabled = false;
     const chatHeaderAvatar = document.getElementById("chatHeaderAvatar");
     if (chatHeaderAvatar) {
@@ -697,7 +764,6 @@ export function selectUser(targetId, targetName) {
     }
     
     const isOnline = state.onlineStatuses.get(state.activeTargetId) === 'online';
-    const chatHeaderPresence = document.getElementById("chatHeaderPresence");
     if (chatHeaderPresence) chatHeaderPresence.className = `presence-indicator ${isOnline ? 'online' : 'offline'}`;
     
     document.getElementById('encryptionBtn').style.display = 'flex';

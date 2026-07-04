@@ -24,20 +24,6 @@ func New() *Database {
 
 func (d *Database) createTables() {
 	query := `
-    CREATE TABLE IF NOT EXISTS messages (
-        id TEXT PRIMARY KEY,
-        chat_id TEXT,
-        sender TEXT,
-        receiver TEXT,
-        data TEXT,
-        iv TEXT,
-        key_sender TEXT,
-        key_receiver TEXT,
-        created_at INTEGER,
-        status TEXT DEFAULT 'sent',
-        reply_to TEXT DEFAULT ''
-    );
-
     CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE,
@@ -50,6 +36,42 @@ func (d *Database) createTables() {
         birthday TEXT DEFAULT '',
         profile_color TEXT DEFAULT ''
     );
+
+    CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        chat_id TEXT,
+        sender TEXT,
+        receiver TEXT,
+        group_id TEXT DEFAULT '',
+        data TEXT,
+        iv TEXT DEFAULT '',
+        key_sender TEXT DEFAULT '',
+        key_receiver TEXT DEFAULT '',
+        created_at INTEGER,
+        status TEXT DEFAULT 'sent',
+        reply_to TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS groups (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        creator_id TEXT NOT NULL,
+        created_at INTEGER,
+        FOREIGN KEY (creator_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS group_members (
+        group_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        joined_at INTEGER,
+        role TEXT DEFAULT 'member',
+        PRIMARY KEY (group_id, user_id),
+        FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id);
+    CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
     `
 
 	_, err := d.DB.Exec(query)

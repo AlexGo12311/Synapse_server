@@ -73,6 +73,22 @@
                 </div>
             </div>
             
+            <!-- 🆕 ВКЛАДКА ГРУППОВЫХ ЧАТОВ -->
+            <div class="tab-pane" id="tab-groups">
+                <div class="groups-header-actions">
+                    <button class="create-group-btn" id="createGroupBtn" onclick="window.groupsModule.openCreateGroupModal()">
+                        <span>+</span>
+                        <span data-i18n="create_group">Create Group</span>
+                    </button>
+                </div>
+                <div id="groupsList"></div>
+                <div class="no-groups-state" id="noGroupsState" style="display:none;">
+                    <div class="empty-icon">👥</div>
+                    <div class="empty-title" data-i18n="no_groups_title">No groups yet</div>
+                    <div class="empty-subtitle" data-i18n="no_groups_subtitle">Create a group to chat with multiple people</div>
+                </div>
+            </div>
+            
             <div class="tab-pane" id="tab-keys">
                 <div class="keys-screen">
                     <div class="keys-icon">🔐</div>
@@ -138,6 +154,11 @@
             <button class="tab-btn active" data-tab="chats" onclick="switchTab('chats')">
                 <span class="tab-icon">💬</span>
                 <span class="tab-label" data-i18n="chats_tab">Chats</span>
+            </button>
+            <!-- 🆕 КНОПКА ГРУПП -->
+            <button class="tab-btn" data-tab="groups" onclick="switchTab('groups')">
+                <span class="tab-icon">👥</span>
+                <span class="tab-label" data-i18n="groups_tab">Groups</span>
             </button>
             <button class="tab-btn" data-tab="keys" onclick="switchTab('keys')">
                 <span class="tab-icon">🔒</span>
@@ -370,6 +391,36 @@
             <p class="encryption-warning" data-i18n="encryption_warning">
                 If this code changes, it may mean your contact reinstalled the app or someone is trying to intercept your conversation.
             </p>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ========= 🆕 МОДАЛКА СОЗДАНИЯ ГРУППЫ ========= -->
+<!-- ============================================ -->
+<div class="create-group-overlay" id="createGroupOverlay">
+    <div class="create-group-modal">
+        <div class="create-group-header">
+            <h3>👥 <span data-i18n="new_group">New Group</span></h3>
+            <button class="settings-close" onclick="window.groupsModule.closeCreateGroupModal()">×</button>
+        </div>
+        <div class="create-group-body">
+            <div class="create-group-field">
+                <label class="profile-label" data-i18n="group_name">Group Name</label>
+                <input type="text" class="profile-input" id="groupNameInput" maxlength="100" data-i18n-placeholder="group_name_placeholder" placeholder="Enter group name...">
+            </div>
+            <div class="create-group-field">
+                <label class="profile-label" data-i18n="select_members">Select Members</label>
+                <div class="create-group-search">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="groupMemberSearch" placeholder="Search users..." data-i18n-placeholder="search_users">
+                </div>
+                <div class="create-group-members" id="createGroupMembersList"></div>
+            </div>
+            <div class="create-group-actions">
+                <button class="profile-btn" onclick="window.groupsModule.closeCreateGroupModal()" data-i18n="cancel">Cancel</button>
+                <button class="profile-btn primary" onclick="window.groupsModule.submitCreateGroup()" data-i18n="create_group">Create</button>
+            </div>
         </div>
     </div>
 </div>

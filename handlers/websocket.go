@@ -38,25 +38,50 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 🆕 Получаем username для broadcast
+	// Получаем username для broadcast
 	username, err := s.store.GetUserByID(userID)
 	if err != nil {
 		log.Println("Failed to get username for broadcast:", err)
 		username = ""
 	}
 
+	// 🆕 Создаём клиент с поддержкой групп
 	client := models.Client{
-		ID:   userID,
-		Conn: ws,
+		ID:     userID,
+		Conn:   ws,
+		Groups: make(map[string]bool),
+	}
+
+	// 🆕 Загружаем группы пользователя из БД и регистрируем в hub
+	userGroups, err := s.store.GetUserGroups(userID)
+	if err == nil {
+		s.hub.Mutex.Lock()
+		for _, g := range userGroups {
+			client.Groups[g.ID] = true
+
+			if s.hub.Groups[g.ID] == nil {
+				s.hub.Groups[g.ID] = make(map[string]bool)
+			}
+			s.hub.Groups[g.ID][userID] = true
+		}
+		s.hub.Mutex.Unlock()
 	}
 
 	defer func() {
 		s.hub.Mutex.Lock()
 		delete(s.hub.Clients, userID)
 
+		// 🆕 Удаляем пользователя из всех групп в hub
+		for groupID, members := range s.hub.Groups {
+			delete(members, userID)
+			// Если группа стала пустой — можно удалить (опционально)
+			if len(members) == 0 {
+				delete(s.hub.Groups, groupID)
+			}
+		}
+
 		for id, c := range s.hub.Clients {
 			if id != userID {
-				// 🆕 Уведомляем что пользователь вышел
 				c.Conn.WriteJSON(map[string]interface{}{
 					"type": "user_left",
 					"id":   userID,
@@ -93,16 +118,22 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 		"users": onlineUsers,
 	})
 
+	// 🆕 Отправляем список групп пользователя
+	if userGroups != nil {
+		ws.WriteJSON(map[string]interface{}{
+			"type":   "my_groups",
+			"groups": userGroups,
+		})
+	}
+
 	s.hub.Mutex.Lock()
 	for id, c := range s.hub.Clients {
 		if id != userID {
-			// 🆕 Уведомляем о новом пользователе
 			c.Conn.WriteJSON(map[string]interface{}{
 				"type":     "user_joined",
 				"id":       userID,
 				"username": username,
 			})
-			// Уведомляем о presence
 			c.Conn.WriteJSON(map[string]interface{}{
 				"type":   "presence",
 				"user":   userID,
@@ -112,12 +143,11 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	s.hub.Mutex.Unlock()
 
-	// 🆕 ПОМЕЧАЕМ ВСЕ НЕДОСТАВЛЕННЫЕ СООБЩЕНИЯ КАК DELIVERED
+	// ПОМЕЧАЕМ ВСЕ НЕДОСТАВЛЕННЫЕ СООБЩЕНИЯ КАК DELIVERED
 	deliveries, err := s.store.MarkAsDelivered(userID)
 	if err != nil {
 		log.Println("MarkAsDelivered error:", err)
 	} else {
-		// Уведомляем отправителей что их сообщения доставлены
 		s.hub.Mutex.Lock()
 		for senderID, msgIDs := range deliveries {
 			if senderClient, ok := s.hub.Clients[senderID]; ok {
@@ -253,7 +283,7 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 			s.hub.Mutex.Unlock()
 
-		// ================= TYPING INDICATOR =================
+		// ================= TYPING INDICATOR (личные чаты) =================
 		case "typing":
 			target, _ := raw["to"].(string)
 			if target == "" {
@@ -283,6 +313,130 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 					"type": "stop_typing",
 					"from": userID,
 				})
+			}
+			s.hub.Mutex.Unlock()
+
+		// ================= GROUP MESSAGES =================
+		case "group_message":
+			groupID, _ := raw["group_id"].(string)
+			data, _ := raw["data"].(string)
+			msgID, _ := raw["id"].(string)
+			replyTo, _ := raw["reply_to"].(string)
+
+			if groupID == "" || data == "" {
+				log.Println("❌ group_message: missing group_id or data")
+				continue
+			}
+
+			// Проверяем что отправитель состоит в группе
+			isMember, _ := s.store.IsGroupMember(groupID, userID)
+			if !isMember {
+				log.Printf("❌ User %s is not a member of group %s", userID, groupID)
+				continue
+			}
+
+			if msgID == "" {
+				msgID = uuid.New().String()
+			}
+
+			groupMsg := models.GroupMessage{
+				ID:        msgID,
+				GroupID:   groupID,
+				Sender:    userID,
+				Username:  username,
+				Data:      data,
+				CreatedAt: time.Now().Unix(),
+				ReplyTo:   replyTo,
+			}
+
+			// Сохраняем в БД
+			if err := s.store.SaveGroupMessage(groupMsg); err != nil {
+				log.Printf("❌ SaveGroupMessage error: %v", err)
+				continue
+			}
+
+			// Подтверждение отправителю
+			ws.WriteJSON(map[string]interface{}{
+				"type":       "group_message_saved",
+				"id":         msgID,
+				"group_id":   groupID,
+				"created_at": groupMsg.CreatedAt,
+			})
+
+			// Рассылаем всем онлайн-участникам группы
+			s.hub.Mutex.Lock()
+			members := s.hub.Groups[groupID]
+			for memberID := range members {
+				if memberID == userID {
+					continue
+				}
+				if client, ok := s.hub.Clients[memberID]; ok {
+					client.Conn.WriteJSON(map[string]interface{}{
+						"type":       "group_message",
+						"id":         msgID,
+						"group_id":   groupID,
+						"sender":     userID,
+						"username":   username,
+						"data":       data,
+						"created_at": groupMsg.CreatedAt,
+						"reply_to":   replyTo,
+					})
+				}
+			}
+			s.hub.Mutex.Unlock()
+
+		// ================= GROUP TYPING =================
+		case "group_typing":
+			groupID, _ := raw["group_id"].(string)
+			if groupID == "" {
+				continue
+			}
+
+			isMember, _ := s.store.IsGroupMember(groupID, userID)
+			if !isMember {
+				continue
+			}
+
+			s.hub.Mutex.Lock()
+			members := s.hub.Groups[groupID]
+			for memberID := range members {
+				if memberID == userID {
+					continue
+				}
+				if client, ok := s.hub.Clients[memberID]; ok {
+					client.Conn.WriteJSON(map[string]interface{}{
+						"type":     "group_typing",
+						"group_id": groupID,
+						"from":     userID,
+					})
+				}
+			}
+			s.hub.Mutex.Unlock()
+
+		case "group_stop_typing":
+			groupID, _ := raw["group_id"].(string)
+			if groupID == "" {
+				continue
+			}
+
+			isMember, _ := s.store.IsGroupMember(groupID, userID)
+			if !isMember {
+				continue
+			}
+
+			s.hub.Mutex.Lock()
+			members := s.hub.Groups[groupID]
+			for memberID := range members {
+				if memberID == userID {
+					continue
+				}
+				if client, ok := s.hub.Clients[memberID]; ok {
+					client.Conn.WriteJSON(map[string]interface{}{
+						"type":     "group_stop_typing",
+						"group_id": groupID,
+						"from":     userID,
+					})
+				}
 			}
 			s.hub.Mutex.Unlock()
 

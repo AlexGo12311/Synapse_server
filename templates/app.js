@@ -23,6 +23,8 @@ import { register, login, logout, initApp } from './modules/events.js';
 import { send } from './modules/websocket.js';
 import { setThemeMode } from './modules/themes.js';
 import { openProfile, closeProfile, initProfile } from './modules/profile.js';
+// 🆕 Модуль групповых чатов
+import * as groupsModule from './modules/groups.js';
 
 // ============================================
 // === ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ HTML onclick ===
@@ -53,6 +55,9 @@ window.chatSearchPrev = chatSearchPrev;
 window.openProfileFn = openProfile;
 window.closeProfileFn = closeProfile;
 
+// 🆕 Модуль групповых чатов — доступен глобально
+window.groupsModule = groupsModule;
+
 // ============================================
 // ========== ОБРАБОТЧИКИ СОБЫТИЙ ============
 // ============================================
@@ -64,4 +69,8 @@ document.addEventListener('submit', (e) => e.preventDefault());
 window.addEventListener('DOMContentLoaded', () => {
     initApp();
     initProfile();
+    // 🆕 Инициализация групповых чатов
+    if (window.groupsModule && window.groupsModule.initGroups) {
+        window.groupsModule.initGroups();
+    }
 });

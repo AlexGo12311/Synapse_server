@@ -70,6 +70,21 @@ func main() {
 		handler.ServeHTTP(w, r)
 	})
 
+	// Групповые чаты
+	mux.Handle("/groups", auth.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			server.GetUserGroups(w, r)
+		case "POST":
+			server.CreateGroup(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/groups/info", auth.AuthMiddleware(http.HandlerFunc(server.GetGroup)))
+	mux.Handle("/groups/history", auth.AuthMiddleware(http.HandlerFunc(server.GetGroupHistory)))
+	mux.Handle("/groups/members", auth.AuthMiddleware(http.HandlerFunc(server.AddMember)))
+
 	log.Println("🚀 Server running on :8080")
 	http.ListenAndServe(":8080", enableCORS(mux))
 }

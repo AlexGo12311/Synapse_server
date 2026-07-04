@@ -6,4 +6,5 @@ type Client struct {
 	ID     string
 	Conn   *websocket.Conn
 	PubKey []byte
+	Groups map[string]bool
 }

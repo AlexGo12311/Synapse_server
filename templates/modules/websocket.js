@@ -103,6 +103,48 @@ export function initWebSocket() {
         
         if (d.type === "stop_typing") { if (String(d.from) === state.activeTargetId) hidePeerTyping(); return; }
         
+        // 🆕 ГРУППОВЫЕ СОБЫТИЯ
+        if (d.type === "my_groups") {
+            if (window.groupsModule) {
+                window.groupsModule.handleMyGroups(d);
+            }
+            return;
+        }
+        
+        if (d.type === "group_created") {
+            if (window.groupsModule) {
+                window.groupsModule.handleGroupCreated(d);
+            }
+            return;
+        }
+        
+        if (d.type === "group_message") {
+            if (window.groupsModule) {
+                window.groupsModule.handleGroupMessage(d);
+            }
+            return;
+        }
+        
+        if (d.type === "group_message_saved") {
+            // Подтверждение сохранения группового сообщения
+            console.log("Group message saved:", d.id);
+            return;
+        }
+        
+        if (d.type === "group_typing") {
+            if (window.groupsModule) {
+                window.groupsModule.handleGroupTyping(d);
+            }
+            return;
+        }
+        
+        if (d.type === "group_stop_typing") {
+            if (window.groupsModule) {
+                window.groupsModule.handleGroupTyping({ ...d, type: "group_typing", stop: true });
+            }
+            return;
+        }
+        
         if (d.type === "pubkey") {
             state.publicKeys[d.from] = await crypto.subtle.importKey("spki", window.fromB64(d.pubKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
             flushPendingReads(d.from);
@@ -143,10 +185,9 @@ export function initWebSocket() {
                     state.userCache.set(fromIdStr, partnerData);
                 }
                 
-                // 🆕 Увеличиваем счётчик только если чат не открыт
                 if (fromIdStr !== state.activeTargetId) {
                     partnerData.unreadCount = (partnerData.unreadCount || 0) + 1;
-                    saveUnreadCounts();  // 🆕 Сохраняем в localStorage
+                    saveUnreadCounts();
                 }
                 
                 partnerData.lastMessage = d;
@@ -233,8 +274,35 @@ export async function sendQueuedMessage(text, target) {
 export async function send() {
     const messageInput = document.getElementById("messageInput");
     const text = messageInput.value.trim();
+    if (!text) return;
+    
+    // 🆕 ПРОВЕРКА: отправляем в группу или в личный чат
+    if (state.activeGroupId) {
+        // Отправка в ГРУППУ
+        if (window.groupsModule) {
+            const replyTo = state.replyingTo ? state.replyingTo.id : null;
+            window.groupsModule.sendGroupMessage(text, replyTo);
+            
+            state.replyingTo = null;
+            const preview = document.getElementById('replyPreview');
+            if (preview) preview.style.display = 'none';
+            
+            messageInput.value = "";
+            if (state.typingTimer) clearTimeout(state.typingTimer);
+            state.isTyping = false;
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                state.ws.send(JSON.stringify({ 
+                    type: "group_stop_typing", 
+                    group_id: state.activeGroupId 
+                }));
+            }
+        }
+        return;
+    }
+    
+    // Отправка в ЛИЧНЫЙ чат
     const target = state.activeTargetId;
-    if (!text || !target) return;
+    if (!target) return;
     
     if (!state.publicKeys[target]) {
         if (!state.pendingMessages[target]) state.pendingMessages[target] = [];

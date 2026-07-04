@@ -24,7 +24,12 @@ export const state = {
     peerTypingTimer: null,
     replyingTo: null,
     messagesMap: new Map(),
-    onlineStatuses: new Map()
+    onlineStatuses: new Map(),
+    groups: [],                    // список групп пользователя
+    activeGroupId: null,           // ID открытой группы
+    activeGroupName: null,         // имя открытой группы
+    groupMessagesMap: new Map(),   // group_id -> Map(msg_id -> msg)
+    groupTypingUsers: new Map(),   // group_id -> Map(user_id -> timer)
 };
 
 export const constants = {
@@ -33,7 +38,8 @@ export const constants = {
     WS_RECONNECT_MAX_DELAY: 30000,
     TYPING_TIMEOUT: 2500,
     SWIPE_THRESHOLD: 70,
-    MIN_HORIZONTAL_RATIO: 1.5
+    MIN_HORIZONTAL_RATIO: 1.5,
+    GROUP_TYPING_TIMEOUT: 3000,
 };
 
 export const AVATAR_COLORS = [
