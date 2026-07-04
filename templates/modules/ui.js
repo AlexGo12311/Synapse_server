@@ -393,7 +393,6 @@ export async function loadLastMessages() {
     }
 }
 
-// 🆕 НОВАЯ ФУНКЦИЯ: загружает РЕАЛЬНОЕ количество непрочитанных с сервера
 export async function loadUnreadCountsFromServer() {
     try {
         const res = await fetch("http://localhost:8080/unread-counts", { 
@@ -402,7 +401,6 @@ export async function loadUnreadCountsFromServer() {
         if (!res.ok) return;
         const counts = await res.json();
         
-        // counts это объект вида { "user_id_1": 3, "user_id_2": 1 }
         for (const [partnerId, count] of Object.entries(counts)) {
             const partner = state.userCache.get(partnerId);
             if (partner) {
@@ -410,9 +408,7 @@ export async function loadUnreadCountsFromServer() {
             }
         }
         
-        // Сохраняем в localStorage
         saveUnreadCounts();
-        
         renderChatsList();
     } catch (e) { 
         console.log("Failed to load unread counts:", e); 
@@ -528,6 +524,16 @@ export function initUI() {
     document.getElementById('newChatOverlay')?.addEventListener('click', (e) => { if (e.target.id === 'newChatOverlay') closeNewChatModal(); });
     const newChatSearchInput = document.getElementById('newChatSearchInput');
     if (newChatSearchInput) newChatSearchInput.addEventListener('input', (e) => renderNewChatList(e.target.value));
+    
+    // Клик по своей аватарке в sidebar открывает свой профиль
+    const myAvatar = document.getElementById('myAvatar');
+    if (myAvatar) {
+        myAvatar.style.cursor = 'pointer';
+        myAvatar.onclick = () => {
+            if (window.openProfileFn) window.openProfileFn(state.userId);
+        };
+    }
+    
     renderThemesGrid();
     loadSavedTheme();
 }
@@ -631,6 +637,13 @@ export function updateChatAreaVisibility() {
     const inputArea = document.getElementById('inputArea');
     const welcomeScreen = document.getElementById('welcomeScreen');
     const chatSearchPanel = document.getElementById('chatSearchPanel');
+    const profileView = document.getElementById('profileView');
+    
+    // Если открыт профиль — не трогаем видимость чата
+    if (profileView && profileView.style.display === 'flex') {
+        return;
+    }
+    
     if (state.activeTargetId) {
         if (welcomeScreen) welcomeScreen.style.display = 'none';
         if (chatHeader) chatHeader.style.display = 'flex';
@@ -646,15 +659,42 @@ export function updateChatAreaVisibility() {
 }
 
 export function selectUser(targetId, targetName) {
+    // 🆕 Закрываем открытый профиль при выборе чата
+    let profileWasOpen = false;
+    const profileView = document.getElementById('profileView');
+    if (profileView && profileView.style.display === 'flex') {
+        profileView.style.display = 'none';
+        profileWasOpen = true;
+    }
+    
     state.activeTargetId = String(targetId);
     state.activeTargetName = targetName;
     const chatTarget = document.getElementById("activeChatTarget");
-    if (chatTarget.innerText === targetName && getLogDiv().children.length > 0) return;
+    
+    // Ранний return только если профиль НЕ был открыт
+    // Если профиль был открыт — нужно заново показать элементы чата
+    if (!profileWasOpen && chatTarget.innerText === targetName && getLogDiv().children.length > 0) return;
+    
     chatTarget.innerText = targetName;
     document.getElementById("messageInput").disabled = false;
     document.getElementById("sendBtn").disabled = false;
     const chatHeaderAvatar = document.getElementById("chatHeaderAvatar");
-    if (chatHeaderAvatar) updateAvatar(chatHeaderAvatar, targetName);
+    if (chatHeaderAvatar) {
+        updateAvatar(chatHeaderAvatar, targetName);
+        // Клик по аватарке в шапке открывает профиль собеседника
+        chatHeaderAvatar.style.cursor = 'pointer';
+        chatHeaderAvatar.onclick = () => {
+            if (window.openProfileFn) window.openProfileFn(state.activeTargetId);
+        };
+    }
+    
+    // Клик по имени в шапке тоже открывает профиль
+    const chatHeaderName = document.getElementById("activeChatTarget");
+    if (chatHeaderName) {
+        chatHeaderName.onclick = () => {
+            if (window.openProfileFn) window.openProfileFn(state.activeTargetId);
+        };
+    }
     
     const isOnline = state.onlineStatuses.get(state.activeTargetId) === 'online';
     const chatHeaderPresence = document.getElementById("chatHeaderPresence");

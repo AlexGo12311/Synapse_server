@@ -31,7 +31,33 @@ const I18N = {
         welcome_lang: "Language", welcome_lang_desc: "English, Русский",
         welcome_keys: "Your Encryption Key", welcome_keys_desc: "Verify your identity",
         welcome_hint: "Select a conversation or tap + to start a new one",
-        typing: "typing", reply_to: "Reply to"
+        typing: "typing", reply_to: "Reply to",
+        // 🆕 Профиль
+        profile: "Profile",
+        username: "Username",
+        bio: "Bio",
+        location: "Location",
+        birthday: "Birthday",
+        edit: "✏️ Edit",
+        edit_bio: "✏️ Edit Bio",
+        add_bio: "✏️ Add Bio",
+        edit_profile: "✏️ Edit Profile",
+        save: "💾 Save",
+        cancel: "✖ Cancel",
+        bio_placeholder: "Write something about yourself...",
+        location_placeholder: "City, Country",
+        online: "Online",
+        offline: "Offline",
+        months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+        profile_color: "🎨 Profile Color",
+        color_red: "Red",
+        color_blue: "Blue",
+        color_green: "Green",
+        color_purple: "Purple",
+        color_orange: "Orange",
+        color_teal: "Teal",
+        color_pink: "Pink",
+        map_hint: "💡 Click on map to set location",
     },
     ru: {
         login: "Войти", register: "Регистрация", send: "Отправить", settings: "🎨 Настройки",
@@ -65,7 +91,34 @@ const I18N = {
         welcome_lang: "Язык интерфейса", welcome_lang_desc: "English, Русский",
         welcome_keys: "Ваш ключ шифрования", welcome_keys_desc: "Подтвердите свою личность",
         welcome_hint: "Выберите диалог или нажмите + чтобы начать новый",
-        typing: "печатает", reply_to: "Ответ"
+        typing: "печатает", reply_to: "Ответ",
+        // 🆕 Профиль
+        profile: "Профиль",
+        username: "Имя пользователя",
+        bio: "О себе",
+        location: "Местоположение",
+        birthday: "День рождения",
+        edit: "✏️ Редактировать",
+        edit_bio: "✏️ Редактировать",
+        add_bio: "✏️ Добавить",
+        edit_profile: "✏️ Редактировать",
+        save: "💾 Сохранить",
+        cancel: "✖ Отмена",
+        bio_placeholder: "Расскажите что-нибудь о себе...",
+        location_placeholder: "Город, Страна",
+        online: "В сети",
+        offline: "Не в сети",
+        months: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],
+        profile_color: "🎨 Цвет профиля",
+        color_red: "Красный",
+        color_blue: "Синий",
+        color_green: "Зелёный",
+        color_purple: "Фиолетовый",
+        color_orange: "Оранжевый",
+        color_teal: "Бирюзовый",
+        color_pink: "Розовый",
+        color_indigo: "Индиго",
+        map_hint: "💡 Кликните по карте, чтобы указать место",
     }
 };
 
@@ -94,4 +147,14 @@ export function setLanguage(lang) {
     document.querySelectorAll('.lang-option').forEach(btn => 
         btn.classList.toggle('active', btn.dataset.lang === lang)
     );
+    
+    // 🆕 Если профиль открыт — перезагружаем его чтобы обновить формат даты и статус
+    const profileView = document.getElementById('profileView');
+    if (profileView && profileView.style.display === 'flex') {
+        const userId = profileView.dataset.profileUserId;
+        if (userId && window.openProfileFn) {
+            // Небольшая задержка чтобы DOM обновился
+            setTimeout(() => window.openProfileFn(userId), 50);
+        }
+    }
 }

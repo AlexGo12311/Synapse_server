@@ -42,7 +42,13 @@ func (d *Database) createTables() {
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE,
         password TEXT,
-        pubkey TEXT
+        pubkey TEXT,
+        bio TEXT DEFAULT '',
+        location TEXT DEFAULT '',
+        latitude REAL DEFAULT 0,
+        longitude REAL DEFAULT 0,
+        birthday TEXT DEFAULT '',
+        profile_color TEXT DEFAULT ''
     );
     `
 
