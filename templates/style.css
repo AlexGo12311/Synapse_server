@@ -2212,7 +2212,7 @@ body.dark-theme .encryption-warning {
     background: var(--surface-main);
     height: 100%;
     overflow: hidden;
-    min-height: 0; /* 🆕 КРИТИЧНО: позволяет flex-элементу сжиматься */
+    min-height: 0;
 }
 
 .profile-view-header {
@@ -2224,7 +2224,7 @@ body.dark-theme .encryption-warning {
     gap: 12px;
     z-index: 10;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    flex-shrink: 0; /* 🆕 Не сжимается */
+    flex-shrink: 0;
 }
 
 .profile-back-btn {
@@ -2254,21 +2254,20 @@ body.dark-theme .encryption-warning {
     color: var(--text-color);
 }
 
-/* 🆕 ГЛАВНЫЙ СКРОЛЛ-КОНТЕЙНЕР */
 .profile-view-body {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    min-height: 0; /* 🆕 КРИТИЧНО: позволяет скролл работать в flex */
+    min-height: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     padding: 0;
-    -webkit-overflow-scrolling: touch; /* Плавный скролл на iOS */
+    -webkit-overflow-scrolling: touch;
 }
 
 /* ================================================ */
-/* ===== 🆕 ГРАДИЕНТНАЯ ШАПКА (PROFILE HERO) ===== */
+/* ===== ГРАДИЕНТНАЯ ШАПКА (PROFILE HERO) ===== */
 /* ================================================ */
 
 .profile-hero {
@@ -2281,36 +2280,18 @@ body.dark-theme .encryption-warning {
     position: relative;
     box-sizing: border-box;
     overflow: hidden;
-    flex-shrink: 0; /* 🆕 Не сжимается */
+    flex-shrink: 0;
 }
 
-/* Градиенты */
-.profile-hero[data-color="ocean"] {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-.profile-hero[data-color="sunset"] {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-.profile-hero[data-color="forest"] {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-}
-.profile-hero[data-color="fire"] {
-    background: linear-gradient(135deg, #f12711 0%, #f5af19 100%);
-}
-.profile-hero[data-color="night"] {
-    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
-}
-.profile-hero[data-color="candy"] {
-    background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
-}
-.profile-hero[data-color="aurora"] {
-    background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
-}
-.profile-hero[data-color="rose"] {
-    background: linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%);
-}
+.profile-hero[data-color="ocean"] { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.profile-hero[data-color="sunset"] { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.profile-hero[data-color="forest"] { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+.profile-hero[data-color="fire"] { background: linear-gradient(135deg, #f12711 0%, #f5af19 100%); }
+.profile-hero[data-color="night"] { background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%); }
+.profile-hero[data-color="candy"] { background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); }
+.profile-hero[data-color="aurora"] { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); }
+.profile-hero[data-color="rose"] { background: linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%); }
 
-/* Обычные цвета */
 .profile-hero[data-color="red"] { background: #e53935; }
 .profile-hero[data-color="blue"] { background: #1e88e5; }
 .profile-hero[data-color="green"] { background: #43a047; }
@@ -2320,7 +2301,6 @@ body.dark-theme .encryption-warning {
 .profile-hero[data-color="pink"] { background: #d81b60; }
 .profile-hero[data-color="indigo"] { background: #3949ab; }
 
-/* Плавное переливание */
 .profile-hero::before {
     content: '';
     position: absolute;
@@ -2393,7 +2373,7 @@ body.dark-theme .encryption-warning {
     gap: 12px;
     width: 100%;
     box-sizing: border-box;
-    flex-shrink: 0; /* 🆕 Не сжимается */
+    flex-shrink: 0;
 }
 
 .profile-avatar {
@@ -2472,7 +2452,7 @@ body.dark-theme .encryption-warning {
 .profile-info {
     width: 100%;
     max-width: 480px;
-    padding: 24px 24px 40px; /* 🆕 Нижний padding для скролла */
+    padding: 24px 24px 40px;
     box-sizing: border-box;
 }
 
@@ -2503,6 +2483,7 @@ body.dark-theme .encryption-warning {
     word-wrap: break-word;
     white-space: pre-wrap;
     line-height: 1.5;
+    box-sizing: border-box;
 }
 
 .profile-value.bio-value {
@@ -2541,30 +2522,37 @@ body.dark-theme input[type="date"] { color-scheme: dark; }
 input[type="date"] { color-scheme: light; }
 
 /* ================================================ */
-/* ===== 🆕 МИНИ-КАРТА В РЕЖИМЕ ПРОСМОТРА ===== */
+/* ===== КАРТЫ (МИНИ-КАРТА + РЕДАКТИРОВАНИЕ) ===== */
 /* ================================================ */
+
+.profile-map-preview,
+.profile-map-edit-container,
+.profile-map-edit,
+.profile-map-hint {
+    box-sizing: border-box;
+}
 
 .profile-map-preview {
     width: 100%;
+    max-width: 100%;
     height: 180px;
     border-radius: 12px;
     margin-top: 10px;
     overflow: hidden;
     border: 1px solid var(--border-color);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    pointer-events: none; /* 🆕 Карта некликабельна при просмотре */
+    pointer-events: none;
 }
-
-/* ================================================ */
-/* ===== 🆕 ИНТЕРАКТИВНАЯ КАРТА ПРИ РЕДАКТИРОВАНИИ ===== */
-/* ================================================ */
 
 .profile-map-edit-container {
     margin-top: 12px;
+    width: 100%;
+    max-width: 100%;
 }
 
 .profile-map-edit {
     width: 100%;
+    max-width: 100%;
     height: 220px;
     border-radius: 12px;
     overflow: hidden;
@@ -2578,6 +2566,7 @@ input[type="date"] { color-scheme: light; }
     color: var(--secondary-text);
     text-align: center;
     font-style: italic;
+    width: 100%;
 }
 
 /* Leaflet customization */
@@ -2603,7 +2592,7 @@ body.dark-theme .profile-map-edit .leaflet-marker-icon {
 }
 
 /* ================================================ */
-/* ===== 🆕 ПАЛИТРА ВЫБОРА ЦВЕТА ===== */
+/* ===== ПАЛИТРА ВЫБОРА ЦВЕТА ===== */
 /* ================================================ */
 
 .profile-color-palette {
@@ -2699,7 +2688,7 @@ body.dark-theme .profile-map-edit .leaflet-marker-icon {
     display: flex;
     gap: 10px;
     margin-top: 20px;
-    padding-bottom: 8px; /* 🆕 Отступ снизу */
+    padding-bottom: 8px;
 }
 
 .profile-btn {
@@ -2736,12 +2725,12 @@ body.dark-theme .profile-map-edit .leaflet-marker-icon {
 /* ================================================ */
 
 .profile-view-body {
-    scrollbar-width: none;        /* Firefox */
-    -ms-overflow-style: none;     /* IE и Edge */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 .profile-view-body::-webkit-scrollbar {
-    display: none;                /* Chrome, Safari, Opera, новый Edge */
+    display: none;
     width: 0;
     height: 0;
 }
