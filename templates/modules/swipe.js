@@ -87,6 +87,7 @@ export function attachSwipeToMessage(row) {
         }
     }
     
+    // 🆕 ИСПРАВЛЕННАЯ функция onEnd — работает и для личных и для групповых чатов
     function onEnd() {
         if (!isDragging) return;
         const wasHorizontal = isHorizontal;
@@ -106,16 +107,23 @@ export function attachSwipeToMessage(row) {
             endDrag(-50, () => {
                 const msgId = row.dataset.msgId;
                 if (msgId) {
-                    const msg = state.messagesMap.get(msgId);
-                    if (msg) {
-                        state.replyingTo = msg;
-                        const preview = document.getElementById('replyPreview');
-                        if (preview) {
-                            document.getElementById('replyPreviewName').textContent = msg.fromUsername;
-                            document.getElementById('replyPreviewText').textContent = msg.text || '🔒 Encrypted';
-                            preview.style.display = 'flex';
-                            const input = document.getElementById('messageInput');
-                            if (input) input.focus();
+                    // 🆕 УНИВЕРСАЛЬНЫЙ СПОСОБ: вызываем window.startReply
+                    // Он сам определит личный это чат или групповой
+                    if (window.startReply) {
+                        window.startReply(msgId);
+                    } else {
+                        // Fallback: старая логика (только для личных)
+                        const msg = state.messagesMap.get(msgId);
+                        if (msg) {
+                            state.replyingTo = msg;
+                            const preview = document.getElementById('replyPreview');
+                            if (preview) {
+                                document.getElementById('replyPreviewName').textContent = msg.fromUsername;
+                                document.getElementById('replyPreviewText').textContent = msg.text || '🔒 Encrypted';
+                                preview.style.display = 'flex';
+                                const input = document.getElementById('messageInput');
+                                if (input) input.focus();
+                            }
                         }
                     }
                 }

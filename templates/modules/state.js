@@ -100,3 +100,35 @@ export function clearUnreadCount(uid) {
         saveUnreadCounts();
     }
 }
+
+// 🆕 СОХРАНЕНИЕ НЕПРОЧИТАННЫХ ГРУППОВЫХ СООБЩЕНИЙ
+export function saveGroupUnreadCounts() {
+    try {
+        const counts = {};
+        if (state.groups) {
+            state.groups.forEach(group => {
+                if (group.unreadCount && group.unreadCount > 0) {
+                    counts[group.id] = group.unreadCount;
+                }
+            });
+        }
+        localStorage.setItem('amini_group_unread', JSON.stringify(counts));
+    } catch (e) {
+        console.error("Failed to save group unread counts:", e);
+    }
+}
+
+export function loadGroupUnreadCounts() {
+    try {
+        const saved = localStorage.getItem('amini_group_unread');
+        if (!saved || !state.groups) return;
+        const counts = JSON.parse(saved);
+        state.groups.forEach(group => {
+            if (counts[group.id]) {
+                group.unreadCount = counts[group.id];
+            }
+        });
+    } catch (e) {
+        console.error("Failed to load group unread counts:", e);
+    }
+}

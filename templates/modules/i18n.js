@@ -77,6 +77,8 @@ const I18N = {
         group_created: "{user} created the group",
         group_typing_one: "{user} is typing",
         group_typing_many: "{count} people are typing",
+        group_created: '🎉 Group "{name}" created',
+        invited_to_group: '✨ You were invited to the group "{name}" by {user}',
     },
     ru: {
         login: "Войти", register: "Регистрация", send: "Отправить", settings: "🎨 Настройки",
@@ -157,6 +159,8 @@ const I18N = {
         group_created: "{user} создал группу",
         group_typing_one: "{user} печатает",
         group_typing_many: "{count} человек печатают",
+        group_created: '🎉 Группа "{name}" создана',
+        invited_to_group: '✨ Вы приглашены в группу "{name}" пользователем {user}',
     }
 };
 

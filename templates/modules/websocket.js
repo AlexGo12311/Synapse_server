@@ -40,6 +40,7 @@ export function initWebSocket() {
     state.ws.onmessage = async (e) => {
         const d = JSON.parse(e.data);
         
+        // ================= ONLINE / PRESENCE =================
         if (d.type === "online_list") { 
             if (Array.isArray(d.users)) {
                 d.users.forEach(uid => {
@@ -54,6 +55,8 @@ export function initWebSocket() {
         if (d.type === "user_joined") {
             const userId = String(d.id);
             const username = d.username;
+            
+            if (!username) return;
             
             state.onlineStatuses.set(userId, 'online');
             
@@ -95,15 +98,29 @@ export function initWebSocket() {
             return; 
         }
         
-        if (d.type === "message_saved") { updateMessageStatus(String(d.id), "sent"); return; }
+        // ================= MESSAGE STATUS =================
+        if (d.type === "message_saved") { 
+            updateMessageStatus(String(d.id), "sent"); 
+            return; 
+        }
         
-        if (d.type === "status_update") { updateMessageStatus(String(d.id), d.status); return; }
+        if (d.type === "status_update") { 
+            updateMessageStatus(String(d.id), d.status); 
+            return; 
+        }
         
-        if (d.type === "typing") { if (String(d.from) === state.activeTargetId) showPeerTyping(); return; }
+        // ================= TYPING (личные чаты) =================
+        if (d.type === "typing") { 
+            if (String(d.from) === state.activeTargetId) showPeerTyping(); 
+            return; 
+        }
         
-        if (d.type === "stop_typing") { if (String(d.from) === state.activeTargetId) hidePeerTyping(); return; }
+        if (d.type === "stop_typing") { 
+            if (String(d.from) === state.activeTargetId) hidePeerTyping(); 
+            return; 
+        }
         
-        // 🆕 ГРУППОВЫЕ СОБЫТИЯ
+        // ================= ГРУППОВЫЕ СОБЫТИЯ =================
         if (d.type === "my_groups") {
             if (window.groupsModule) {
                 window.groupsModule.handleMyGroups(d);
@@ -125,9 +142,19 @@ export function initWebSocket() {
             return;
         }
         
-        if (d.type === "group_message_saved") {
-            // Подтверждение сохранения группового сообщения
-            console.log("Group message saved:", d.id);
+        // 🆕 ОБНОВЛЕНИЕ СТАТУСА ОДНОГО СООБЩЕНИЯ (delivered)
+        if (d.type === "group_status_update") {
+            if (window.groupsModule && window.groupsModule.handleGroupStatusUpdate) {
+                window.groupsModule.handleGroupStatusUpdate(d);
+            }
+            return;
+        }
+        
+        // 🆕 МАССОВОЕ ОБНОВЛЕНИЕ СТАТУСОВ (read)
+        if (d.type === "group_bulk_status_update") {
+            if (window.groupsModule && window.groupsModule.handleGroupBulkStatusUpdate) {
+                window.groupsModule.handleGroupBulkStatusUpdate(d);
+            }
             return;
         }
         
@@ -140,11 +167,16 @@ export function initWebSocket() {
         
         if (d.type === "group_stop_typing") {
             if (window.groupsModule) {
-                window.groupsModule.handleGroupTyping({ ...d, type: "group_typing", stop: true });
+                window.groupsModule.handleGroupTyping({ 
+                    ...d, 
+                    type: "group_typing", 
+                    stop: true 
+                });
             }
             return;
         }
         
+        // ================= PUBKEY =================
         if (d.type === "pubkey") {
             state.publicKeys[d.from] = await crypto.subtle.importKey("spki", window.fromB64(d.pubKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
             flushPendingReads(d.from);
@@ -157,6 +189,7 @@ export function initWebSocket() {
             return;
         }
         
+        // ================= ЛИЧНОЕ СООБЩЕНИЕ (с защитой от "Unknown") =================
         if (d.type === "message") {
             const msgIdStr = String(d.id);
             if (state.shownMessages.has(msgIdStr)) return;
@@ -165,7 +198,9 @@ export function initWebSocket() {
             const text = await window.decryptMessage(d, state.userId);
             const fromIdStr = String(d.from);
             const isMe = fromIdStr === state.userId;
-            const fromUsername = isMe ? localStorage.getItem("username") : (state.userCache.get(fromIdStr)?.username || "User");
+            const fromUsername = isMe 
+                ? localStorage.getItem("username") 
+                : (state.userCache.get(fromIdStr)?.username || "User");
             const replyToId = d.reply_to || null;
             
             if (!isMe && fromIdStr === state.activeTargetId) hidePeerTyping();
@@ -174,8 +209,15 @@ export function initWebSocket() {
                 let partnerData = state.userCache.get(fromIdStr);
                 if (!partnerData) {
                     const user = state.allUsersList.find(u => String(u.id) === fromIdStr);
+                    
+                    const resolvedUsername = user?.username || fromUsername;
+                    if (!resolvedUsername || resolvedUsername === "Unknown" || resolvedUsername === "User") {
+                        console.warn("⚠️ Skipping message from unknown user:", fromIdStr);
+                        return;
+                    }
+                    
                     partnerData = { 
-                        username: user?.username || fromUsername || "Unknown", 
+                        username: resolvedUsername, 
                         lastMessage: null, 
                         lastMessageText: null, 
                         lastTime: null, 
@@ -201,8 +243,15 @@ export function initWebSocket() {
                 let partnerData = state.userCache.get(toId);
                 if (!partnerData) {
                     const user = state.allUsersList.find(u => String(u.id) === toId);
+                    
+                    const resolvedUsername = user?.username;
+                    if (!resolvedUsername) {
+                        console.warn("⚠️ Skipping own message to unknown user:", toId);
+                        return;
+                    }
+                    
                     partnerData = { 
-                        username: user?.username || "Unknown", 
+                        username: resolvedUsername, 
                         lastMessage: null, 
                         lastMessageText: null, 
                         lastTime: null, 
@@ -253,8 +302,14 @@ export async function sendQueuedMessage(text, target) {
     let partnerData = state.userCache.get(target);
     if (!partnerData) {
         const user = state.allUsersList.find(u => String(u.id) === target);
+        
+        if (!user?.username) {
+            console.warn("⚠️ Cannot send queued message to unknown user:", target);
+            return;
+        }
+        
         partnerData = { 
-            username: user?.username || "Unknown", 
+            username: user.username, 
             lastMessage: { id: messageId, from: state.userId, to: target, created_at: Date.now() / 1000 }, 
             lastMessageText: text, 
             lastTime: Date.now() / 1000, 
@@ -271,15 +326,15 @@ export async function sendQueuedMessage(text, target) {
     renderChatsList();
 }
 
+// УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ОТПРАВКИ (личные + группы)
 export async function send() {
     const messageInput = document.getElementById("messageInput");
     const text = messageInput.value.trim();
     if (!text) return;
     
-    // 🆕 ПРОВЕРКА: отправляем в группу или в личный чат
+    // ================= ОТПРАВКА В ГРУППУ =================
     if (state.activeGroupId) {
-        // Отправка в ГРУППУ
-        if (window.groupsModule) {
+        if (window.groupsModule && window.groupsModule.sendGroupMessage) {
             const replyTo = state.replyingTo ? state.replyingTo.id : null;
             window.groupsModule.sendGroupMessage(text, replyTo);
             
@@ -300,7 +355,7 @@ export async function send() {
         return;
     }
     
-    // Отправка в ЛИЧНЫЙ чат
+    // ================= ОТПРАВКА В ЛИЧНЫЙ ЧАТ =================
     const target = state.activeTargetId;
     if (!target) return;
     
@@ -325,8 +380,15 @@ export async function send() {
     let partnerData = state.userCache.get(target);
     if (!partnerData) {
         const user = state.allUsersList.find(u => String(u.id) === target);
+        
+        if (!user?.username) {
+            console.warn("⚠️ Cannot send message to unknown user:", target);
+            messageInput.value = "";
+            return;
+        }
+        
         partnerData = { 
-            username: user?.username || state.activeTargetName || "Unknown", 
+            username: user.username, 
             lastMessage: { id: messageId, from: state.userId, to: target, created_at: Date.now() / 1000 }, 
             lastMessageText: text, 
             lastTime: Date.now() / 1000, 

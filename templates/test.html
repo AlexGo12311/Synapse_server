@@ -47,6 +47,11 @@
                 <span class="presence-indicator online"></span>
             </div>
             <span class="my-username" id="myUsernameDisplay"></span>
+            <!-- 🆕 КНОПКА СОЗДАНИЯ ГРУППЫ -->
+            <button class="new-group-btn" id="newGroupBtn" onclick="window.groupsModule.openCreateGroupModal()" title="New group">
+                <span>👥</span>
+            </button>
+            <!-- Кнопка нового чата -->
             <button class="new-chat-btn" id="newChatBtn" onclick="openNewChatModal()" title="New chat">
                 <span>+</span>
             </button>
@@ -70,22 +75,6 @@
                 <div class="search-empty" id="searchEmptyState" style="display:none;">
                     <div class="empty-icon">🔍</div>
                     <div class="empty-text" data-i18n="no_results">No chats found</div>
-                </div>
-            </div>
-            
-            <!-- 🆕 ВКЛАДКА ГРУППОВЫХ ЧАТОВ -->
-            <div class="tab-pane" id="tab-groups">
-                <div class="groups-header-actions">
-                    <button class="create-group-btn" id="createGroupBtn" onclick="window.groupsModule.openCreateGroupModal()">
-                        <span>+</span>
-                        <span data-i18n="create_group">Create Group</span>
-                    </button>
-                </div>
-                <div id="groupsList"></div>
-                <div class="no-groups-state" id="noGroupsState" style="display:none;">
-                    <div class="empty-icon">👥</div>
-                    <div class="empty-title" data-i18n="no_groups_title">No groups yet</div>
-                    <div class="empty-subtitle" data-i18n="no_groups_subtitle">Create a group to chat with multiple people</div>
                 </div>
             </div>
             
@@ -154,11 +143,6 @@
             <button class="tab-btn active" data-tab="chats" onclick="switchTab('chats')">
                 <span class="tab-icon">💬</span>
                 <span class="tab-label" data-i18n="chats_tab">Chats</span>
-            </button>
-            <!-- 🆕 КНОПКА ГРУПП -->
-            <button class="tab-btn" data-tab="groups" onclick="switchTab('groups')">
-                <span class="tab-icon">👥</span>
-                <span class="tab-label" data-i18n="groups_tab">Groups</span>
             </button>
             <button class="tab-btn" data-tab="keys" onclick="switchTab('keys')">
                 <span class="tab-icon">🔒</span>

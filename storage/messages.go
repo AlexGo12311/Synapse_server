@@ -46,6 +46,7 @@ func (s *Storage) GetMessages(chatID string) ([]models.Message, error) {
                created_at, status, COALESCE(reply_to, '') as reply_to
         FROM messages
         WHERE chat_id = ?
+          AND (group_id = '' OR group_id IS NULL)
         ORDER BY created_at ASC
     `, chatID)
 
@@ -117,6 +118,8 @@ type LastMessage struct {
 	ReplyTo     string `json:"reply_to,omitempty"`
 }
 
+// GetLastMessages возвращает последние сообщения ТОЛЬКО для личных чатов
+// Групповые сообщения исключены через WHERE (group_id = ” OR group_id IS NULL)
 func (s *Storage) GetLastMessages(userID string) ([]LastMessage, error) {
 	query := `
         SELECT 
@@ -127,9 +130,11 @@ func (s *Storage) GetLastMessages(userID string) ([]LastMessage, error) {
         INNER JOIN (
             SELECT chat_id, MAX(created_at) as max_time
             FROM messages
-            WHERE sender = ? OR receiver = ?
+            WHERE (sender = ? OR receiver = ?)
+              AND (group_id = '' OR group_id IS NULL)
             GROUP BY chat_id
         ) latest ON m.chat_id = latest.chat_id AND m.created_at = latest.max_time
+        WHERE (m.group_id = '' OR m.group_id IS NULL)
         ORDER BY m.created_at DESC
     `
 
@@ -179,11 +184,14 @@ func (s *Storage) GetLastMessages(userID string) ([]LastMessage, error) {
 }
 
 // GetUnreadCounts возвращает количество непрочитанных сообщений для каждого собеседника
+// 🆕 Групповые сообщения исключены
 func (s *Storage) GetUnreadCounts(userID string) (map[string]int, error) {
 	query := `
 		SELECT sender, COUNT(*)
 		FROM messages
-		WHERE receiver = ? AND status != 'read'
+		WHERE receiver = ? 
+		  AND status != 'read'
+		  AND (group_id = '' OR group_id IS NULL)
 		GROUP BY sender
 	`
 
@@ -203,7 +211,6 @@ func (s *Storage) GetUnreadCounts(userID string) (map[string]int, error) {
 		counts[partnerID] = count
 	}
 
-	// Добавляем проверку для консистентности с другими функциями
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -212,13 +219,15 @@ func (s *Storage) GetUnreadCounts(userID string) (map[string]int, error) {
 }
 
 // MarkAsDelivered помечает все недоставленные сообщения для пользователя как delivered
-// и возвращает карту {sender_id: [msg_ids...]} для уведомления отправителей
+// 🆕 Групповые сообщения исключены
 func (s *Storage) MarkAsDelivered(userID string) (map[string][]string, error) {
-	// Сначала получаем все сообщения которые нужно обновить
+	// Сначала получаем все сообщения которые нужно обновить (только личные)
 	query := `
 		SELECT id, sender 
 		FROM messages 
-		WHERE receiver = ? AND status = 'sent'
+		WHERE receiver = ? 
+		  AND status = 'sent'
+		  AND (group_id = '' OR group_id IS NULL)
 	`
 
 	rows, err := s.db.DB.Query(query, userID)
@@ -227,7 +236,6 @@ func (s *Storage) MarkAsDelivered(userID string) (map[string][]string, error) {
 	}
 	defer rows.Close()
 
-	// Группируем msg_id по sender_id
 	deliveries := make(map[string][]string)
 	for rows.Next() {
 		var msgID, senderID string
@@ -241,12 +249,14 @@ func (s *Storage) MarkAsDelivered(userID string) (map[string][]string, error) {
 		return nil, err
 	}
 
-	// Если есть что обновлять — обновляем
+	// Если есть что обновлять — обновляем (только личные)
 	if len(deliveries) > 0 {
 		_, err = s.db.DB.Exec(`
 			UPDATE messages 
 			SET status = 'delivered' 
-			WHERE receiver = ? AND status = 'sent'
+			WHERE receiver = ? 
+			  AND status = 'sent'
+			  AND (group_id = '' OR group_id IS NULL)
 		`, userID)
 		if err != nil {
 			return nil, err

@@ -18,13 +18,8 @@ export function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabName));
     document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.toggle('active', pane.id === 'tab-' + tabName));
     const searchContainer = document.getElementById('searchContainer');
-    if (searchContainer) searchContainer.classList.toggle('hidden', tabName !== 'chats' && tabName !== 'groups');
+    if (searchContainer) searchContainer.classList.toggle('hidden', tabName !== 'chats');
     if (tabName === 'keys') updateMyFingerprintDisplay();
-    
-    // 🆕 Загружаем группы при переключении на вкладку groups
-    if (tabName === 'groups' && window.groupsModule) {
-        window.groupsModule.loadGroups();
-    }
 }
 
 export async function updateMyFingerprintDisplay() {
@@ -65,7 +60,7 @@ export function initChatListSearch() {
 
 export function filterChats(query) {
     renderChatsList();
-    const items = document.querySelectorAll('.user-item');
+    const items = document.querySelectorAll('.user-item, .group-item');
     const emptyState = document.getElementById('searchEmptyState');
     const noChatsState = document.getElementById('noChatsState');
     let visibleCount = 0;
@@ -273,67 +268,139 @@ export async function showKeyExchangeIfNeeded(targetId) {
 export function renderChatsList() {
     const listContainer = document.getElementById("usersList");
     const noChatsState = document.getElementById("noChatsState");
+    const searchEmptyState = document.getElementById("searchEmptyState");
     if (!listContainer) return;
     listContainer.innerHTML = "";
-    const activeChats = [];
-    state.userCache.forEach((data, uid) => { if (data.lastMessage !== null) activeChats.push({ uid, ...data }); });
-    activeChats.sort((a, b) => (b.lastTime || 0) - (a.lastTime || 0));
-    if (noChatsState) noChatsState.style.display = activeChats.length === 0 ? 'flex' : 'none';
+    
     const searchInput = document.getElementById('searchInput');
     const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
-    activeChats.forEach(chat => {
-        if (searchQuery && !chat.username.toLowerCase().includes(searchQuery)) return;
-        const btn = document.createElement("button");
-        btn.className = "user-item";
-        btn.id = "user-btn-" + chat.uid;
-        btn.dataset.username = chat.username;
-        btn.dataset.userid = chat.uid;
-        const avatarWrapper = document.createElement('div');
-        avatarWrapper.className = 'avatar-wrapper';
-        avatarWrapper.appendChild(createAvatarElement(chat.username));
+    
+    const allItems = [];
+    
+    state.userCache.forEach((data, uid) => { 
+        if (!uid || uid === '') return;
+        if (uid === state.userId) return;
+        if (!data.username || data.username === "Unknown" || data.username === "User") return;
         
-        const presenceIndicator = document.createElement("span");
-        const isOnline = state.onlineStatuses.get(chat.uid) === 'online';
-        presenceIndicator.className = `presence-indicator ${isOnline ? 'online' : 'offline'}`;
-        presenceIndicator.id = `presence-${chat.uid}`;
-        avatarWrapper.appendChild(presenceIndicator);
-        
-        const content = document.createElement("div");
-        content.className = "user-item-content";
-        const top = document.createElement("div");
-        top.className = "user-item-top";
-        const nameSpan = document.createElement("span");
-        nameSpan.className = "user-item-name";
-        nameSpan.textContent = chat.username;
-        top.appendChild(nameSpan);
-        const timeSpan = document.createElement("span");
-        timeSpan.className = "user-item-time";
-        if (chat.lastTime) timeSpan.textContent = formatTime(chat.lastTime);
-        top.appendChild(timeSpan);
-        if (chat.unreadCount > 0) {
-            const unreadBadge = document.createElement("span");
-            unreadBadge.className = "user-item-unread";
-            unreadBadge.textContent = chat.unreadCount;
-            top.appendChild(unreadBadge);
+        if (data.lastMessage !== null) {
+            allItems.push({
+                type: 'personal',
+                uid: uid,
+                username: data.username,
+                lastTime: data.lastTime || 0,
+                lastMessageText: data.lastMessageText || t('encrypted'),
+                lastFromMe: data.lastFromMe,
+                unreadCount: data.unreadCount || 0
+            });
         }
-        content.appendChild(top);
-        const preview = document.createElement("div");
-        preview.className = "user-item-preview";
-        const prefix = document.createElement("span");
-        prefix.className = "user-item-preview-prefix";
-        if (chat.lastFromMe) prefix.textContent = t('you') + ":";
-        preview.appendChild(prefix);
-        const previewText = document.createElement("span");
-        previewText.className = "user-item-preview-text";
-        previewText.textContent = chat.lastMessageText || t('encrypted');
-        preview.appendChild(previewText);
-        content.appendChild(preview);
-        btn.appendChild(avatarWrapper);
-        btn.appendChild(content);
-        if (chat.uid === state.activeTargetId) btn.classList.add('active');
-        btn.onclick = () => selectUser(chat.uid, chat.username);
-        listContainer.appendChild(btn);
     });
+    
+    if (state.groups && state.groups.length > 0) {
+        state.groups.forEach(group => {
+            allItems.push({
+                type: 'group',
+                group: group,
+                lastTime: group.last_message_time || group.created_at || 0,
+                lastMessageText: group.last_message_text || null,
+                lastMessageSender: group.last_message_sender
+            });
+        });
+    }
+    
+    allItems.sort((a, b) => (b.lastTime || 0) - (a.lastTime || 0));
+    
+    const filteredItems = searchQuery
+        ? allItems.filter(item => {
+            if (item.type === 'personal') {
+                return item.username.toLowerCase().includes(searchQuery);
+            } else {
+                return item.group.name.toLowerCase().includes(searchQuery);
+            }
+        })
+        : allItems;
+    
+    filteredItems.forEach(item => {
+        if (item.type === 'personal') {
+            const btn = document.createElement("button");
+            btn.className = "user-item";
+            btn.id = "user-btn-" + item.uid;
+            btn.dataset.username = item.username;
+            btn.dataset.userid = item.uid;
+            
+            const avatarWrapper = document.createElement('div');
+            avatarWrapper.className = 'avatar-wrapper';
+            avatarWrapper.appendChild(createAvatarElement(item.username));
+            
+            const presenceIndicator = document.createElement("span");
+            const isOnline = state.onlineStatuses.get(item.uid) === 'online';
+            presenceIndicator.className = `presence-indicator ${isOnline ? 'online' : 'offline'}`;
+            presenceIndicator.id = `presence-${item.uid}`;
+            avatarWrapper.appendChild(presenceIndicator);
+            
+            const content = document.createElement("div");
+            content.className = "user-item-content";
+            
+            const top = document.createElement("div");
+            top.className = "user-item-top";
+            
+            const nameSpan = document.createElement("span");
+            nameSpan.className = "user-item-name";
+            nameSpan.textContent = item.username;
+            top.appendChild(nameSpan);
+            
+            const timeSpan = document.createElement("span");
+            timeSpan.className = "user-item-time";
+            if (item.lastTime) timeSpan.textContent = formatTime(item.lastTime);
+            top.appendChild(timeSpan);
+            
+            if (item.unreadCount > 0) {
+                const unreadBadge = document.createElement("span");
+                unreadBadge.className = "user-item-unread";
+                unreadBadge.textContent = item.unreadCount;
+                top.appendChild(unreadBadge);
+            }
+            content.appendChild(top);
+            
+            const preview = document.createElement("div");
+            preview.className = "user-item-preview";
+            const prefix = document.createElement("span");
+            prefix.className = "user-item-preview-prefix";
+            if (item.lastFromMe) prefix.textContent = t('you') + ":";
+            preview.appendChild(prefix);
+            const previewText = document.createElement("span");
+            previewText.className = "user-item-preview-text";
+            previewText.textContent = item.lastMessageText;
+            preview.appendChild(previewText);
+            content.appendChild(preview);
+            
+            btn.appendChild(avatarWrapper);
+            btn.appendChild(content);
+            
+            if (item.uid === state.activeTargetId) btn.classList.add('active');
+            btn.onclick = () => selectUser(item.uid, item.username);
+            listContainer.appendChild(btn);
+            
+        } else if (item.type === 'group') {
+            if (window.groupsModule && window.groupsModule.renderGroupItem) {
+                const groupEl = window.groupsModule.renderGroupItem(item.group);
+                listContainer.appendChild(groupEl);
+            }
+        }
+    });
+    
+    const hasAnyChats = filteredItems.length > 0;
+    
+    if (noChatsState) {
+        noChatsState.style.display = (!hasAnyChats && !searchQuery) ? 'flex' : 'none';
+    }
+    
+    if (searchEmptyState) {
+        searchEmptyState.style.display = (searchQuery && !hasAnyChats) ? 'flex' : 'none';
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.renderChatsList = renderChatsList;
 }
 
 export async function loadAllUsers() {
@@ -351,7 +418,14 @@ export async function loadAllUsers() {
     } catch (err) { console.log("Failed to load users:", err); }
 }
 
-export async function loadUsersList() { await loadAllUsers(); await loadLastMessages(); renderChatsList(); }
+export async function loadUsersList() { 
+    await loadAllUsers(); 
+    await loadLastMessages(); 
+    if (window.groupsModule && window.groupsModule.loadGroups) {
+        await window.groupsModule.loadGroups();
+    }
+    renderChatsList(); 
+}
 
 export function updateUserPreview(uid) {
     const data = state.userCache.get(uid);
@@ -447,7 +521,6 @@ export function initTypingIndicator() {
 }
 
 export function onTypingInput() {
-    // 🆕 Поддержка группового typing
     if (state.activeGroupId) {
         if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
         if (!state.isTyping) {
@@ -464,7 +537,6 @@ export function onTypingInput() {
         return;
     }
     
-    // Личные чаты (старая логика)
     if (!state.activeTargetId || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
     if (!state.isTyping) { state.isTyping = true; state.ws.send(JSON.stringify({ type: "typing", to: state.activeTargetId })); }
     if (state.typingTimer) clearTimeout(state.typingTimer);
@@ -496,7 +568,6 @@ export function hidePeerTyping() {
 }
 
 export function startReply(msgId) {
-    // 🆕 Сначала проверяем групповые сообщения
     if (state.activeGroupId) {
         const groupMsgMap = state.groupMessagesMap ? state.groupMessagesMap.get(state.activeGroupId) : null;
         const msg = groupMsgMap ? groupMsgMap.get(msgId) : null;
@@ -528,8 +599,8 @@ export function cancelReply() {
 }
 
 export function renderReplyQuote(replyToId) {
-    // 🆕 Поддержка reply из групповых чатов
     let msg = state.messagesMap.get(replyToId);
+    
     if (!msg && state.activeGroupId && state.groupMessagesMap) {
         const groupMsgMap = state.groupMessagesMap.get(state.activeGroupId);
         if (groupMsgMap) {
@@ -575,7 +646,6 @@ export function initUI() {
     const newChatSearchInput = document.getElementById('newChatSearchInput');
     if (newChatSearchInput) newChatSearchInput.addEventListener('input', (e) => renderNewChatList(e.target.value));
     
-    // Клик по своей аватарке в sidebar открывает свой профиль
     const myAvatar = document.getElementById('myAvatar');
     if (myAvatar) {
         myAvatar.style.cursor = 'pointer';
@@ -584,8 +654,7 @@ export function initUI() {
         };
     }
     
-    // 🆕 Инициализация модуля групп
-    if (window.groupsModule) {
+    if (window.groupsModule && window.groupsModule.initGroups) {
         window.groupsModule.initGroups();
     }
     
@@ -694,12 +763,10 @@ export function updateChatAreaVisibility() {
     const chatSearchPanel = document.getElementById('chatSearchPanel');
     const profileView = document.getElementById('profileView');
     
-    // Если открыт профиль — не трогаем видимость чата
     if (profileView && profileView.style.display === 'flex') {
         return;
     }
     
-    // 🆕 Учитываем и личные и групповые чаты
     if (state.activeTargetId || state.activeGroupId) {
         if (welcomeScreen) welcomeScreen.style.display = 'none';
         if (chatHeader) chatHeader.style.display = 'flex';
@@ -714,8 +781,8 @@ export function updateChatAreaVisibility() {
     }
 }
 
+// 🆕 ИСПРАВЛЕНО: убран syncGroupCounters из selectUser
 export function selectUser(targetId, targetName) {
-    // 🆕 Закрываем открытый профиль при выборе чата
     let profileWasOpen = false;
     const profileView = document.getElementById('profileView');
     if (profileView && profileView.style.display === 'flex') {
@@ -723,12 +790,10 @@ export function selectUser(targetId, targetName) {
         profileWasOpen = true;
     }
     
-    // 🆕 Сбрасываем групповой чат
     state.activeGroupId = null;
     state.activeGroupName = null;
     document.querySelectorAll('.group-item').forEach(el => el.classList.remove('active'));
     
-    // 🆕 Восстанавливаем placeholder и presence indicator
     const messageInput = document.getElementById("messageInput");
     if (messageInput) messageInput.placeholder = t('message_placeholder');
     
@@ -739,23 +804,24 @@ export function selectUser(targetId, targetName) {
     state.activeTargetName = targetName;
     const chatTarget = document.getElementById("activeChatTarget");
     
-    // Ранний return только если профиль НЕ был открыт
     if (!profileWasOpen && chatTarget.innerText === targetName && getLogDiv().children.length > 0) return;
     
     chatTarget.innerText = targetName;
     if (messageInput) messageInput.disabled = false;
     document.getElementById("sendBtn").disabled = false;
+    
     const chatHeaderAvatar = document.getElementById("chatHeaderAvatar");
     if (chatHeaderAvatar) {
+        chatHeaderAvatar.style.background = '';
+        chatHeaderAvatar.textContent = '';
         updateAvatar(chatHeaderAvatar, targetName);
-        // Клик по аватарке в шапке открывает профиль собеседника
+        
         chatHeaderAvatar.style.cursor = 'pointer';
         chatHeaderAvatar.onclick = () => {
             if (window.openProfileFn) window.openProfileFn(state.activeTargetId);
         };
     }
     
-    // Клик по имени в шапке тоже открывает профиль
     const chatHeaderName = document.getElementById("activeChatTarget");
     if (chatHeaderName) {
         chatHeaderName.onclick = () => {
@@ -769,7 +835,6 @@ export function selectUser(targetId, targetName) {
     document.getElementById('encryptionBtn').style.display = 'flex';
     document.getElementById('chatSearchBtn').style.display = 'flex';
     
-    // Сбрасываем счётчик и сохраняем в localStorage
     const data = state.userCache.get(state.activeTargetId);
     if (data && data.unreadCount > 0) {
         data.unreadCount = 0;
@@ -787,6 +852,10 @@ export function selectUser(targetId, targetName) {
     renderChatsList();
     updateChatAreaVisibility();
     if (state.ws && state.ws.readyState === WebSocket.OPEN) state.ws.send(JSON.stringify({ type: "get_pubkey", to: state.activeTargetId }));
+    
+    // 🆕 УБРАНО: syncGroupCounters больше не вызывается при переключении на личный чат
+    // Это вызывало race condition с POST /groups/seen и "прыгающий" counter
+    
     loadHistory(state.activeTargetId);
 }
 

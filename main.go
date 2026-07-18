@@ -84,6 +84,7 @@ func main() {
 	mux.Handle("/groups/info", auth.AuthMiddleware(http.HandlerFunc(server.GetGroup)))
 	mux.Handle("/groups/history", auth.AuthMiddleware(http.HandlerFunc(server.GetGroupHistory)))
 	mux.Handle("/groups/members", auth.AuthMiddleware(http.HandlerFunc(server.AddMember)))
+	mux.Handle("/groups/seen", auth.AuthMiddleware(http.HandlerFunc(server.MarkGroupSeen)))
 
 	log.Println("🚀 Server running on :8080")
 	http.ListenAndServe(":8080", enableCORS(mux))

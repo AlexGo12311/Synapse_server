@@ -355,15 +355,15 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Подтверждение отправителю
+			// 🆕 Подтверждение ОТПРАВИТЕЛЮ: delivered (две серые галочки)
 			ws.WriteJSON(map[string]interface{}{
-				"type":       "group_message_saved",
-				"id":         msgID,
-				"group_id":   groupID,
-				"created_at": groupMsg.CreatedAt,
+				"type":     "group_status_update",
+				"id":       msgID,
+				"group_id": groupID,
+				"status":   "delivered",
 			})
 
-			// Рассылаем всем онлайн-участникам группы
+			// Рассылаем всем участникам (кроме отправителя)
 			s.hub.Mutex.Lock()
 			members := s.hub.Groups[groupID]
 			for memberID := range members {
@@ -380,6 +380,95 @@ func (s *Server) HandleConnections(w http.ResponseWriter, r *http.Request) {
 						"data":       data,
 						"created_at": groupMsg.CreatedAt,
 						"reply_to":   replyTo,
+					})
+				}
+			}
+			s.hub.Mutex.Unlock()
+
+		// ================= 🆕 ОБНОВЛЕНИЕ СТАТУСА ГРУППОВОГО СООБЩЕНИЯ =================
+		// Клиент отправляет когда получил сообщение (delivered) или прочитал (read)
+		// Сервер находит отправителя сообщения и пересылает ему статус
+		case "group_status_update":
+			groupID, _ := raw["group_id"].(string)
+			msgID, _ := raw["id"].(string)
+			status, _ := raw["status"].(string)
+
+			if groupID == "" || msgID == "" || status == "" {
+				continue
+			}
+
+			// Проверяем что отправитель состоит в группе
+			isMember, _ := s.store.IsGroupMember(groupID, userID)
+			if !isMember {
+				continue
+			}
+
+			// Находим отправителя сообщения в БД
+			senderID, err := s.store.GetGroupMessageSender(msgID, groupID)
+			if err != nil || senderID == "" || senderID == userID {
+				// Не нашли отправителя или это своё сообщение — пропускаем
+				continue
+			}
+
+			// 🆕 Отправляем статус ОТПРАВИТЕЛЮ (если он онлайн)
+			s.hub.Mutex.Lock()
+			if senderClient, ok := s.hub.Clients[senderID]; ok {
+				senderClient.Conn.WriteJSON(map[string]interface{}{
+					"type":     "group_status_update",
+					"id":       msgID,
+					"group_id": groupID,
+					"status":   status,
+				})
+			}
+			s.hub.Mutex.Unlock()
+
+		// ================= 🆕 МАССОВОЕ ОБНОВЛЕНИЕ СТАТУСОВ (read) =================
+		// Используется когда /groups/seen рассылает read статусы сразу для множества сообщений
+		case "group_bulk_status_update":
+			groupID, _ := raw["group_id"].(string)
+			status, _ := raw["status"].(string)
+			idsRaw, _ := raw["ids"].([]interface{})
+
+			if groupID == "" || status == "" || len(idsRaw) == 0 {
+				continue
+			}
+
+			// Конвертируем ids в []string
+			var msgIDs []string
+			for _, idRaw := range idsRaw {
+				if idStr, ok := idRaw.(string); ok {
+					msgIDs = append(msgIDs, idStr)
+				}
+			}
+
+			if len(msgIDs) == 0 {
+				continue
+			}
+
+			// 🆕 Группируем сообщения по отправителю
+			senderToMsgs := make(map[string][]string)
+			for _, msgID := range msgIDs {
+				senderID, err := s.store.GetGroupMessageSender(msgID, groupID)
+				if err == nil && senderID != "" && senderID != userID {
+					senderToMsgs[senderID] = append(senderToMsgs[senderID], msgID)
+				}
+			}
+
+			// 🆕 Отправляем массовый статус каждому отправителю
+			s.hub.Mutex.Lock()
+			for senderID, senderMsgIDs := range senderToMsgs {
+				if senderClient, ok := s.hub.Clients[senderID]; ok {
+					// Конвертируем []string в []interface{} для JSON
+					idsInterface := make([]interface{}, len(senderMsgIDs))
+					for i, id := range senderMsgIDs {
+						idsInterface[i] = id
+					}
+
+					senderClient.Conn.WriteJSON(map[string]interface{}{
+						"type":     "group_bulk_status_update",
+						"group_id": groupID,
+						"status":   status,
+						"ids":      idsInterface,
 					})
 				}
 			}
