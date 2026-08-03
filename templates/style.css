@@ -3318,3 +3318,256 @@ body.dark-theme .profile-map-edit .leaflet-marker-icon {
     letter-spacing: -3px;
     padding-right: 3px;
 }
+
+/* ================================================ */
+/* ===== ИНФО-ПАНЕЛЬ ГРУППЫ ===== */
+/* ================================================ */
+
+.group-info-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--surface-main);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.group-info-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface-container);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.group-info-back {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.group-info-back:hover {
+    background: var(--hover-bg);
+}
+
+.group-info-title {
+    font-size: 18px;
+    font-weight: 600;
+    flex: 1;
+}
+
+.group-info-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.group-info-avatar-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+}
+
+.group-info-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-color-hover));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 48px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.group-info-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-color);
+    text-align: center;
+}
+
+.group-info-creator {
+    font-size: 13px;
+    color: var(--secondary-text);
+}
+
+.group-info-section {
+    background: var(--surface-container);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.group-info-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--secondary-text);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.group-info-section-title .add-btn {
+    font-size: 20px;
+    color: var(--accent-color);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    padding: 4px 8px;
+    border-radius: 50%;
+    line-height: 1;
+}
+
+.group-info-section-title .add-btn:hover {
+    background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+}
+
+.group-info-member {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.group-info-member:last-child {
+    border-bottom: none;
+}
+
+.group-info-member-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.group-info-member-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.group-info-member-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.group-info-member-role {
+    font-size: 11px;
+    background: color-mix(in srgb, var(--accent-color) 20%, transparent);
+    color: var(--accent-color);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.group-info-member-remove {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: #e74c3c;
+    cursor: pointer;
+    border-radius: 50%;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.group-info-member-remove:hover {
+    background: rgba(231, 76, 60, 0.1);
+}
+
+.group-info-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 20px 20px;
+}
+
+.group-info-action-btn {
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.group-info-action-btn.rename {
+    background: var(--surface-container);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.group-info-action-btn.rename:hover {
+    background: var(--hover-bg);
+}
+
+.group-info-action-btn.leave {
+    background: transparent;
+    color: #f39c12;
+    border: 1px solid #f39c12;
+}
+
+.group-info-action-btn.leave:hover {
+    background: rgba(243, 156, 18, 0.1);
+}
+
+.group-info-action-btn.delete {
+    background: transparent;
+    color: #e74c3c;
+    border: 1px solid #e74c3c;
+}
+
+.group-info-action-btn.delete:hover {
+    background: rgba(231, 76, 60, 0.1);
+}
+
+/* Делаем название в шапке кликабельным */
+.chat-header-name.clickable {
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.chat-header-name.clickable:hover {
+    opacity: 0.7;
+}

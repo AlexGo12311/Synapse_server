@@ -157,6 +157,22 @@ export function initWebSocket() {
             }
             return;
         }
+
+                // 🆕 Группа переименована
+        if (d.type === "group_renamed") {
+            if (window.groupsModule && window.groupsModule.handleGroupRenamed) {
+                window.groupsModule.handleGroupRenamed(d);
+            }
+            return;
+        }
+
+        // 🆕 Группа удалена или нас удалили
+        if (d.type === "group_removed") {
+            if (window.groupsModule && window.groupsModule.handleGroupRemoved) {
+                window.groupsModule.handleGroupRemoved(d);
+            }
+            return;
+        }
         
         if (d.type === "group_typing") {
             if (window.groupsModule) {

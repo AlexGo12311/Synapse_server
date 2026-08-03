@@ -85,6 +85,11 @@ func main() {
 	mux.Handle("/groups/history", auth.AuthMiddleware(http.HandlerFunc(server.GetGroupHistory)))
 	mux.Handle("/groups/members", auth.AuthMiddleware(http.HandlerFunc(server.AddMember)))
 	mux.Handle("/groups/seen", auth.AuthMiddleware(http.HandlerFunc(server.MarkGroupSeen)))
+	mux.Handle("/groups/rename", auth.AuthMiddleware(http.HandlerFunc(server.RenameGroup)))
+	mux.Handle("/groups/add-members", auth.AuthMiddleware(http.HandlerFunc(server.AddMembersToGroup)))
+	mux.Handle("/groups/remove-member", auth.AuthMiddleware(http.HandlerFunc(server.RemoveMemberFromGroup)))
+	mux.Handle("/groups/leave", auth.AuthMiddleware(http.HandlerFunc(server.LeaveGroup)))
+	mux.Handle("/groups/delete", auth.AuthMiddleware(http.HandlerFunc(server.DeleteGroup)))
 
 	log.Println("🚀 Server running on :8080")
 	http.ListenAndServe(":8080", enableCORS(mux))

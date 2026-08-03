@@ -337,3 +337,217 @@ func (s *Server) MarkGroupSeen(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
+
+// PUT /groups/rename
+func (s *Server) RenameGroup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userIDRaw := r.Context().Value(auth.UserContextKey)
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID string `json:"group_id"`
+		Name    string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" || len(req.Name) > 100 {
+		http.Error(w, "Invalid name", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.store.RenameGroup(req.GroupID, req.Name, userID); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	// 🆕 Уведомляем всех участников группы о переименовании
+	s.hub.Mutex.Lock()
+	members := s.hub.Groups[req.GroupID]
+	for memberID := range members {
+		if client, ok := s.hub.Clients[memberID]; ok {
+			client.Conn.WriteJSON(map[string]interface{}{
+				"type":     "group_renamed",
+				"group_id": req.GroupID,
+				"name":     req.Name,
+			})
+		}
+	}
+	s.hub.Mutex.Unlock()
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// POST /groups/add-members
+func (s *Server) AddMembersToGroup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userIDRaw := r.Context().Value(auth.UserContextKey)
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID string   `json:"group_id"`
+		Members []string `json:"members"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Проверяем что requester - создатель
+	creatorID, err := s.store.GetGroupCreator(req.GroupID)
+	if err != nil || creatorID != userID {
+		http.Error(w, "Only creator can add members", http.StatusForbidden)
+		return
+	}
+
+	group, _ := s.store.GetGroupByID(req.GroupID)
+
+	for _, memberID := range req.Members {
+		if memberID == userID {
+			continue
+		}
+		s.store.AddMember(req.GroupID, memberID)
+		s.notifyGroupCreated(memberID, group, userID)
+	}
+
+	// Добавляем в hub
+	s.hub.Mutex.Lock()
+	for _, memberID := range req.Members {
+		if s.hub.Groups[req.GroupID] == nil {
+			s.hub.Groups[req.GroupID] = make(map[string]bool)
+		}
+		s.hub.Groups[req.GroupID][memberID] = true
+	}
+	s.hub.Mutex.Unlock()
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// POST /groups/remove-member
+func (s *Server) RemoveMemberFromGroup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userIDRaw := r.Context().Value(auth.UserContextKey)
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID    string `json:"group_id"`
+		TargetUser string `json:"target_user"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.store.RemoveMemberFromGroup(req.GroupID, req.TargetUser, userID); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	// Удаляем из hub и уведомляем
+	s.hub.Mutex.Lock()
+	delete(s.hub.Groups[req.GroupID], req.TargetUser)
+	if client, ok := s.hub.Clients[req.TargetUser]; ok {
+		delete(client.Groups, req.GroupID)
+		client.Conn.WriteJSON(map[string]interface{}{
+			"type":     "group_removed",
+			"group_id": req.GroupID,
+		})
+	}
+	s.hub.Mutex.Unlock()
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// POST /groups/leave
+func (s *Server) LeaveGroup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userIDRaw := r.Context().Value(auth.UserContextKey)
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID string `json:"group_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.store.LeaveGroup(req.GroupID, userID); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	// Удаляем из hub
+	s.hub.Mutex.Lock()
+	delete(s.hub.Groups[req.GroupID], userID)
+	if client, ok := s.hub.Clients[userID]; ok {
+		delete(client.Groups, req.GroupID)
+	}
+	s.hub.Mutex.Unlock()
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// DELETE /groups
+func (s *Server) DeleteGroup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userIDRaw := r.Context().Value(auth.UserContextKey)
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID string `json:"group_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.store.DeleteGroup(req.GroupID, userID); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	// 🆕 Уведомляем всех участников что группа удалена
+	s.hub.Mutex.Lock()
+	members := s.hub.Groups[req.GroupID]
+	for memberID := range members {
+		if client, ok := s.hub.Clients[memberID]; ok {
+			delete(client.Groups, req.GroupID)
+			client.Conn.WriteJSON(map[string]interface{}{
+				"type":     "group_removed",
+				"group_id": req.GroupID,
+			})
+		}
+	}
+	delete(s.hub.Groups, req.GroupID)
+	s.hub.Mutex.Unlock()
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}

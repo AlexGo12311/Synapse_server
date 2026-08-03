@@ -409,5 +409,52 @@
     </div>
 </div>
 
+<!-- ============================================ -->
+<!-- ========= 🆕 МОДАЛКА ДОБАВЛЕНИЯ УЧАСТНИКОВ ========= -->
+<!-- ============================================ -->
+<div class="create-group-overlay" id="addMembersOverlay">
+    <div class="create-group-modal">
+        <div class="create-group-header">
+            <h3>➕ <span data-i18n="add_members">Add Members</span></h3>
+            <button class="settings-close" onclick="window.groupsModule.closeAddMembersModal()">×</button>
+        </div>
+        <div class="create-group-body">
+            <div class="create-group-field">
+                <div class="create-group-search">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="addMembersSearch" placeholder="Search users..." data-i18n-placeholder="search_users">
+                </div>
+                <div class="create-group-members" id="addMembersList"></div>
+            </div>
+            <div class="create-group-actions">
+                <button class="profile-btn" onclick="window.groupsModule.closeAddMembersModal()" data-i18n="cancel">Cancel</button>
+                <button class="profile-btn primary" onclick="window.groupsModule.submitAddMembers()" data-i18n="add">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ========= 🆕 МОДАЛКА ПЕРЕИМЕНОВАНИЯ ГРУППЫ ========= -->
+<!-- ============================================ -->
+<div class="create-group-overlay" id="renameGroupOverlay">
+    <div class="create-group-modal">
+        <div class="create-group-header">
+            <h3>✏️ <span data-i18n="rename_group">Rename Group</span></h3>
+            <button class="settings-close" onclick="window.groupsModule.closeRenameModal()">×</button>
+        </div>
+        <div class="create-group-body">
+            <div class="create-group-field">
+                <label class="profile-label" data-i18n="group_name">Group Name</label>
+                <input type="text" class="profile-input" id="renameGroupInput" maxlength="100" data-i18n-placeholder="group_name_placeholder" placeholder="Enter new name...">
+            </div>
+            <div class="create-group-actions">
+                <button class="profile-btn" onclick="window.groupsModule.closeRenameModal()" data-i18n="cancel">Cancel</button>
+                <button class="profile-btn primary" onclick="window.groupsModule.submitRename()" data-i18n="save">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

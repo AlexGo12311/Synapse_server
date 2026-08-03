@@ -406,3 +406,106 @@ func (s *Storage) GetGroupLastSeen(groupID, userID string) (int64, error) {
 	}
 	return lastSeen, nil
 }
+
+// Переименовать группу (только создатель)
+func (s *Storage) RenameGroup(groupID, newName, userID string) error {
+	// Проверяем что пользователь - создатель
+	var creatorID string
+	err := s.db.DB.QueryRow(`SELECT creator_id FROM groups WHERE id = ?`, groupID).Scan(&creatorID)
+	if err != nil {
+		return err
+	}
+	if creatorID != userID {
+		return fmt.Errorf("only creator can rename group")
+	}
+
+	_, err = s.db.DB.Exec(`
+        UPDATE groups SET name = ? WHERE id = ?
+    `, newName, groupID)
+	return err
+}
+
+// Удалить участника из группы (только создатель)
+func (s *Storage) RemoveMemberFromGroup(groupID, targetUserID, requesterID string) error {
+	var creatorID string
+	err := s.db.DB.QueryRow(`SELECT creator_id FROM groups WHERE id = ?`, groupID).Scan(&creatorID)
+	if err != nil {
+		return err
+	}
+	if creatorID != requesterID {
+		return fmt.Errorf("only creator can remove members")
+	}
+	if creatorID == targetUserID {
+		return fmt.Errorf("cannot remove creator from group")
+	}
+
+	_, err = s.db.DB.Exec(`
+        DELETE FROM group_members WHERE group_id = ? AND user_id = ?
+    `, groupID, targetUserID)
+	return err
+}
+
+// Выйти из группы (не создатель)
+func (s *Storage) LeaveGroup(groupID, userID string) error {
+	var creatorID string
+	err := s.db.DB.QueryRow(`SELECT creator_id FROM groups WHERE id = ?`, groupID).Scan(&creatorID)
+	if err != nil {
+		return err
+	}
+	if creatorID == userID {
+		return fmt.Errorf("creator cannot leave group, use delete instead")
+	}
+
+	_, err = s.db.DB.Exec(`
+        DELETE FROM group_members WHERE group_id = ? AND user_id = ?
+    `, groupID, userID)
+	return err
+}
+
+// Удалить группу (только создатель)
+func (s *Storage) DeleteGroup(groupID, userID string) error {
+	var creatorID string
+	err := s.db.DB.QueryRow(`SELECT creator_id FROM groups WHERE id = ?`, groupID).Scan(&creatorID)
+	if err != nil {
+		return err
+	}
+	if creatorID != userID {
+		return fmt.Errorf("only creator can delete group")
+	}
+
+	tx, err := s.db.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Удаляем участников
+	_, err = tx.Exec(`DELETE FROM group_members WHERE group_id = ?`, groupID)
+	if err != nil {
+		return err
+	}
+
+	// Удаляем сообщения
+	_, err = tx.Exec(`DELETE FROM messages WHERE group_id = ?`, groupID)
+	if err != nil {
+		return err
+	}
+
+	// Удаляем саму группу
+	_, err = tx.Exec(`DELETE FROM groups WHERE id = ?`, groupID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// Получить создателя группы
+func (s *Storage) GetGroupCreator(groupID string) (string, error) {
+	var creatorID string
+	err := s.db.DB.QueryRow(`SELECT creator_id FROM groups WHERE id = ?`, groupID).Scan(&creatorID)
+	if err != nil {
+		return "", err
+	}
+	return creatorID, nil
+}
